@@ -73,16 +73,18 @@ def actualizar(ruta_db: str | Path) -> int:
 def asegurar_admin(ruta_db: str | Path) -> None:
     """Si no hay ningún Admin activo y están definidas ADMIN_USUARIO y
     ADMIN_PASSWORD, lo crea. Es la forma de entrar la primera vez a una base
-    nueva (y de recuperar el acceso si se pierde la contraseña del único
-    Admin)."""
+    nueva. Con ADMIN_FORZAR=1 además restablece la contraseña de ese usuario
+    aunque ya existan Admins (recuperación de acceso); hay que quitar la
+    variable después, porque si no se repite en cada arranque."""
     nombre = os.environ.get("ADMIN_USUARIO", "").strip()
     password = os.environ.get("ADMIN_PASSWORD", "")
     if not nombre or not password:
         return
+    forzar = os.environ.get("ADMIN_FORZAR", "") == "1"
     con = sqlite3.connect(ruta_db)
     try:
         hay_admin = con.execute("SELECT 1 FROM usuarios WHERE rol='admin' AND activo=1 LIMIT 1").fetchone()
-        if hay_admin:
+        if hay_admin and not forzar:
             return
         con.execute(
             """INSERT INTO usuarios (nombre, password_hash, rol, activo) VALUES (?, ?, 'admin', 1)
@@ -90,6 +92,7 @@ def asegurar_admin(ruta_db: str | Path) -> None:
             (nombre, generate_password_hash(password)),
         )
         con.commit()
-        print(f"[arranque] Se creó el Admin '{nombre}' desde las variables de entorno (la base no tenía ninguno).")
+        accion = "Se restableció la contraseña del Admin" if hay_admin else "Se creó el Admin"
+        print(f"[arranque] {accion} '{nombre}' desde las variables de entorno.")
     finally:
         con.close()
