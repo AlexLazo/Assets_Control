@@ -11,7 +11,7 @@ CREATE TABLE usuarios (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre         TEXT NOT NULL UNIQUE,
     password_hash  TEXT NOT NULL,
-    rol            TEXT NOT NULL DEFAULT 'operador' CHECK (rol IN ('admin','operador')),
+    rol            TEXT NOT NULL DEFAULT 'supervisor' CHECK (rol IN ('supervisor','facturador','admin','super_admin')),
     activo         BOOLEAN NOT NULL DEFAULT 1
 );
 

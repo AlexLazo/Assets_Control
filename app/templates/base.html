@@ -197,25 +197,33 @@
       <a href="{{ url_for('escaneo.salida') }}" class="{{ 'activo' if request.endpoint == 'escaneo.salida' }}">{{ icono('salida') }}<span>Salida</span></a>
       <a href="{{ url_for('escaneo.retorno') }}" class="{{ 'activo' if request.endpoint == 'escaneo.retorno' }}">{{ icono('retorno') }}<span>Retorno</span></a>
       <a href="{{ url_for('conteo.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('conteo.') }}">{{ icono('conteo') }}<span>Conteo</span></a>
-      {% if current_user.rol == 'admin' %}
+      <a href="{{ url_for('mantenimiento.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('mantenimiento.') }}">{{ icono('mantenimiento') }}<span>Mantenimiento</span></a>
       <div class="separador"></div>
       <a href="{{ url_for('pendientes.ver') }}" class="{{ 'activo' if request.endpoint == 'pendientes.ver' }}">{{ icono('pendientes') }}<span>Pendientes</span></a>
       <a href="{{ url_for('dashboard.ver') }}" class="{{ 'activo' if request.endpoint == 'dashboard.ver' }}">{{ icono('dashboard') }}<span>Dashboard</span></a>
-      <a href="{{ url_for('bitacora.ver') }}" class="{{ 'activo' if request.endpoint == 'bitacora.ver' }}">{{ icono('bitacora') }}<span>Bitácora</span></a>
       <a href="{{ url_for('inventario.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('inventario.') }}">{{ icono('inventario') }}<span>Inventario</span></a>
-      <a href="{{ url_for('usuarios.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('usuarios.') }}">{{ icono('usuarios') }}<span>Usuarios</span></a>
+      {% if puede('bitacora') %}
+      <a href="{{ url_for('bitacora.ver') }}" class="{{ 'activo' if request.endpoint == 'bitacora.ver' }}">{{ icono('bitacora') }}<span>Bitácora</span></a>
       <a href="{{ url_for('historial.ver') }}" class="{{ 'activo' if request.endpoint == 'historial.ver' }}">{{ icono('historial-diario') }}<span>Historial diario</span></a>
-      <a href="{{ url_for('mantenimiento.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('mantenimiento.') }}">{{ icono('mantenimiento') }}<span>Mantenimiento</span></a>
+      {% endif %}
+      {% if puede('usuarios') %}
+      <a href="{{ url_for('usuarios.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('usuarios.') }}">{{ icono('usuarios') }}<span>Usuarios</span></a>
+      {% endif %}
+      {% if puede('etiquetas') or puede('datos') %}
       <div class="separador"></div>
+      {% endif %}
+      {% if puede('etiquetas') %}
       <a href="{{ url_for('etiquetas.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('etiquetas.') }}">{{ icono('etiquetas') }}<span>Etiquetas QR</span></a>
-      <a href="{{ url_for('datos.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('datos.') }}">{{ icono('datos') }}<span>Importar datos</span></a>
+      {% endif %}
+      {% if puede('datos') %}
+      <a href="{{ url_for('datos.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('datos.') }}">{{ icono('datos') }}<span>Datos y respaldos</span></a>
       {% endif %}
     </nav>
     <div class="usuario-box">
       <div class="avatar">{{ current_user.nombre[:2]|upper }}</div>
       <div class="datos">
         <div class="nombre">{{ current_user.nombre }}</div>
-        <div class="rol">{{ 'Admin' if current_user.rol == 'admin' else 'Operador' }}</div>
+        <div class="rol">{{ ROLES[current_user.rol] }}</div>
       </div>
       <form method="post" action="{{ url_for('auth.logout') }}">
         <button type="submit" class="secundario">Salir</button>

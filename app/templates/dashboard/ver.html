@@ -46,6 +46,7 @@
   </table>
 </div>
 
+{% if puede('cerrar_dia') %}
 <div class="tarjeta">
   <h2>Cerrar el día</h2>
   <p class="ayuda">Al cerrar el día, cualquier equipo que siga marcado "en ruta" (sin importar desde cuándo) queda registrado como incidencia para revisar.</p>
@@ -54,6 +55,7 @@
     <button type="submit" class="peligro">Cerrar el día</button>
   </form>
 </div>
+{% endif %}
 
 <div class="tarjeta">
   <h2>Incidencias abiertas ({{ incidencias|length }})</h2>

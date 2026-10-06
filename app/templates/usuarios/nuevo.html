@@ -9,8 +9,9 @@
 
     <label for="rol">Rol</label>
     <select id="rol" name="rol">
-      <option value="operador" {% if rol == 'operador' %}selected{% endif %}>Operador (solo Salida/Retorno)</option>
-      <option value="admin" {% if rol == 'admin' %}selected{% endif %}>Admin (control total)</option>
+      {% for r in roles_asignables %}
+      <option value="{{ r }}" {% if rol == r %}selected{% endif %}>{{ ROLES[r] }}</option>
+      {% endfor %}
     </select>
 
     <label for="password">Contraseña</label>

@@ -2,6 +2,16 @@
 {% block titulo %}Bitácora{% endblock %}
 {% block contenido %}
 <div class="tarjeta">
+  <h2>Excel de control</h2>
+  <p class="ayuda">Un solo archivo con: <strong>quién salió</strong> (y si ya regresó), <strong>quién NO ha regresado</strong>, <strong>quién NO salió</strong>, resumen por ruta, escaneos por usuario y todos los movimientos. Si no eliges fechas, es el de hoy.</p>
+  <form method="get" action="{{ url_for('bitacora.exportar') }}" class="en-linea" style="flex-wrap:wrap; gap:0.75rem;">
+    <div><label for="x-desde" style="margin-bottom:0.2rem;">Desde</label><input type="date" id="x-desde" name="desde" value="{{ filtros['desde'] }}" style="margin-bottom:0;"></div>
+    <div><label for="x-hasta" style="margin-bottom:0.2rem;">Hasta</label><input type="date" id="x-hasta" name="hasta" value="{{ filtros['hasta'] }}" style="margin-bottom:0;"></div>
+    <button type="submit" style="align-self:flex-end;">Descargar Excel</button>
+  </form>
+</div>
+
+<div class="tarjeta">
   <h2>Filtros</h2>
   <form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items:end;">
     <div>

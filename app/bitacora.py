@@ -1,13 +1,40 @@
-from flask import Blueprint, render_template, request
+from datetime import date
 
-from .auth import requiere_admin
+from flask import Blueprint, abort, render_template, request, send_file
+
+from . import reporte_excel
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("bitacora", __name__, url_prefix="/bitacora")
 
 
+@bp.route("/exportar")
+@requiere_permiso("bitacora")
+def exportar():
+    """Excel de control del rango pedido (por defecto, hoy)."""
+    desde = request.args.get("desde") or date.today().isoformat()
+    hasta = request.args.get("hasta") or desde
+    try:
+        date.fromisoformat(desde)
+        date.fromisoformat(hasta)
+    except ValueError:
+        abort(400, "Fechas inválidas (usa AAAA-MM-DD).")
+    if desde > hasta:
+        desde, hasta = hasta, desde
+
+    archivo = reporte_excel.generar_excel(get_db(), desde, hasta)
+    nombre = f"bitacora_{desde}.xlsx" if desde == hasta else f"bitacora_{desde}_a_{hasta}.xlsx"
+    return send_file(
+        archivo,
+        as_attachment=True,
+        download_name=nombre,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 @bp.route("/")
-@requiere_admin
+@requiere_permiso("bitacora")
 def ver():
     db = get_db()
 

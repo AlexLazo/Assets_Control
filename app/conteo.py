@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from .auth import requiere_admin
+from .auth import puede, requiere_permiso
 from .db import get_db
 
 bp = Blueprint("conteo", __name__, url_prefix="/conteo")
@@ -66,7 +66,7 @@ def ver():
         return render_template("conteo/escanear.html", conteo=abierto, total=total, ultimos=ultimos)
 
     historial = []
-    if current_user.rol == "admin":
+    if puede("conteo_gestionar"):
         historial = db.execute(
             """SELECT c.*, u.nombre AS inicio_por,
                       (SELECT COUNT(*) FROM conteo_items WHERE conteo_id = c.id) AS total
@@ -77,7 +77,7 @@ def ver():
 
 
 @bp.route("/iniciar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("conteo_gestionar")
 def iniciar():
     db = get_db()
     try:
@@ -140,7 +140,7 @@ def escanear():
 
 
 @bp.route("/<int:conteo_id>/cerrar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("conteo_gestionar")
 def cerrar(conteo_id):
     db = get_db()
     db.execute(
@@ -152,7 +152,7 @@ def cerrar(conteo_id):
 
 
 @bp.route("/<int:conteo_id>")
-@requiere_admin
+@requiere_permiso("conteo_gestionar")
 def resultado(conteo_id):
     db = get_db()
     conteo = db.execute("SELECT * FROM conteos WHERE id = ?", (conteo_id,)).fetchone()
@@ -172,7 +172,7 @@ def resultado(conteo_id):
 
 
 @bp.route("/<int:conteo_id>/ajustar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("conteo_gestionar")
 def ajustar(conteo_id):
     db = get_db()
     conteo = db.execute("SELECT * FROM conteos WHERE id = ?", (conteo_id,)).fetchone()

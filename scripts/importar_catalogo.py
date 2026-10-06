@@ -75,7 +75,7 @@ def obtener_o_crear_operador(con: sqlite3.Connection, nombre: str) -> int:
     # columna en una base que ya migró a login con contraseña.
     hash_inutilizable = generate_password_hash(secrets.token_hex(32))
     cur = con.execute(
-        "INSERT INTO usuarios (nombre, password_hash, rol) VALUES (?, ?, 'operador')",
+        "INSERT INTO usuarios (nombre, password_hash, rol) VALUES (?, ?, 'supervisor')",
         (nombre, hash_inutilizable),
     )
     return cur.lastrowid

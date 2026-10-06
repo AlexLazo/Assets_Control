@@ -27,16 +27,25 @@ def _en_produccion() -> bool:
     return bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PRODUCCION"))
 
 
-def _directorio_datos(app: Flask) -> Path:
-    """Dónde viven la base, los respaldos y la llave de sesión.
+def _directorio_datos(app: Flask, produccion: bool) -> tuple[Path, bool]:
+    """Dónde viven la base, los respaldos y la llave de sesión, y si ese
+    lugar es PERSISTENTE.
 
-    En Railway TIENE que ser un volumen persistente (RAILWAY_VOLUME_MOUNT_PATH
-    o DATA_DIR): el disco normal del contenedor se borra en cada deploy, y con
-    él se perdería la base. En tu PC sigue siendo la carpeta instance/."""
+    En Railway TIENE que ser un volumen (RAILWAY_VOLUME_MOUNT_PATH o
+    DATA_DIR): el disco normal del contenedor se borra en cada deploy y con él
+    la base. Si estamos en producción y no hay volumen, la app NO arranca (el
+    deploy falla a la vista y Railway deja corriendo la versión anterior) en
+    vez de seguir funcionando y perder los datos en silencio."""
     configurado = os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if produccion and not configurado and os.environ.get("PERMITIR_SIN_VOLUMEN") != "1":
+        raise RuntimeError(
+            "PRODUCCIÓN SIN VOLUMEN PERSISTENTE: la base de datos se borraría en cada deploy. "
+            "En Railway agrega un Volume al servicio (Settings -> Volumes, mount path /data). "
+            "Railway define RAILWAY_VOLUME_MOUNT_PATH solo cuando el volumen está conectado a ESTE servicio."
+        )
     carpeta = Path(configurado) if configurado else Path(app.instance_path)
     carpeta.mkdir(parents=True, exist_ok=True)
-    return carpeta
+    return carpeta, bool(configurado)
 
 
 def _obtener_o_crear_secret_key(carpeta: Path) -> str:
@@ -64,13 +73,14 @@ def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     produccion = _en_produccion()
-    carpeta = _directorio_datos(app)
+    carpeta, persistente = _directorio_datos(app, produccion)
 
     app.config.from_mapping(
         SECRET_KEY=_obtener_o_crear_secret_key(carpeta),
         DATA_DIR=str(carpeta),
         DATABASE=str(carpeta / "activos.db"),
         PRODUCCION=produccion,
+        PERSISTENTE=persistente,
         # El botón "Reiniciar base de datos" borra todo: en producción queda
         # apagado salvo que se active a propósito con PERMITIR_REINICIO=1.
         PERMITIR_REINICIO=os.environ.get("PERMITIR_REINICIO", "0" if produccion else "1") == "1",
@@ -92,6 +102,12 @@ def create_app() -> Flask:
 
     migraciones.actualizar(app.config["DATABASE"])
     migraciones.asegurar_admin(app.config["DATABASE"])
+    import sqlite3 as _sqlite
+
+    _con = _sqlite.connect(app.config["DATABASE"])
+    _equipos = _con.execute("SELECT COUNT(*) FROM equipos").fetchone()[0]
+    _con.close()
+    print(f"[arranque] datos en {carpeta} | volumen persistente: {'SI' if persistente else 'NO (solo desarrollo local)'} | equipos en la base: {_equipos}")
     respaldos.iniciar(app)
 
     db_module.init_app(app)
@@ -99,6 +115,7 @@ def create_app() -> Flask:
 
     from . import auth
     login_manager.user_loader(auth.cargar_usuario)
+    app.context_processor(lambda: {"puede": auth.puede, "ROLES": auth.ROLES})
 
     from . import escaneo, dashboard, bitacora, inventario, usuarios, etiquetas, datos, historial, mantenimiento, conteo, pendientes
 

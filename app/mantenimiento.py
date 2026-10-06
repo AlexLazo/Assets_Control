@@ -1,14 +1,14 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask_login import login_required
 from flask_login import current_user
 
-from .auth import requiere_admin
 from .db import get_db
 
 bp = Blueprint("mantenimiento", __name__, url_prefix="/mantenimiento")
 
 
 @bp.route("/")
-@requiere_admin
+@login_required
 def ver():
     db = get_db()
 
@@ -35,7 +35,7 @@ def ver():
 
 
 @bp.route("/enviar", methods=["POST"])
-@requiere_admin
+@login_required
 def enviar():
     id_interno = request.form.get("id_interno", "").strip().upper()
     motivo = request.form.get("motivo", "").strip() or None
@@ -76,7 +76,7 @@ def enviar():
 
 
 @bp.route("/<int:mantenimiento_id>/regreso", methods=["POST"])
-@requiere_admin
+@login_required
 def regreso(mantenimiento_id):
     resultado = request.form.get("resultado", "").strip() or None
     nuevo_estado = request.form.get("nuevo_estado", "activo")

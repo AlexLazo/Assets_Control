@@ -11,7 +11,7 @@ import comun
 import importar_catalogo
 
 from . import migraciones, respaldos
-from .auth import requiere_admin
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("datos", __name__, url_prefix="/admin/datos")
@@ -23,7 +23,7 @@ ARCHIVOS = {
 
 
 @bp.route("/")
-@requiere_admin
+@requiere_permiso("datos")
 def ver():
     resumen = None
     try:
@@ -62,11 +62,13 @@ def ver():
         respaldos=lista,
         permitir_reinicio=current_app.config["PERMITIR_REINICIO"],
         produccion=current_app.config["PRODUCCION"],
+        persistente=current_app.config["PERSISTENTE"],
+        carpeta=current_app.config["DATA_DIR"],
     )
 
 
 @bp.route("/subir", methods=["POST"])
-@requiere_admin
+@requiere_permiso("datos")
 def subir():
     tipo = request.form.get("tipo")
     archivo = request.files.get("archivo")
@@ -93,7 +95,7 @@ def subir():
 
 
 @bp.route("/actualizar-catalogo", methods=["POST"])
-@requiere_admin
+@requiere_permiso("datos")
 def actualizar_catalogo():
     db = get_db()
     resultado = importar_catalogo.actualizar_o_agregar(db, current_user.id)
@@ -110,7 +112,7 @@ def actualizar_catalogo():
 # ---------------------------------------------------------------- respaldos
 
 @bp.route("/respaldo/ahora")
-@requiere_admin
+@requiere_permiso("datos")
 def respaldo_ahora():
     """Genera un respaldo consistente de la base y lo descarga."""
     destino = respaldos.hacer_respaldo(current_app, "manual")
@@ -118,7 +120,7 @@ def respaldo_ahora():
 
 
 @bp.route("/respaldo/<nombre>")
-@requiere_admin
+@requiere_permiso("datos")
 def respaldo_descargar(nombre):
     archivo = respaldos.carpeta(current_app) / Path(nombre).name
     if not archivo.exists() or not archivo.name.startswith(respaldos.PREFIJO) or archivo.suffix != ".db":
@@ -127,7 +129,7 @@ def respaldo_descargar(nombre):
 
 
 @bp.route("/restaurar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("datos")
 def restaurar():
     """Reemplaza el contenido de la base por el de un .db subido (por ejemplo
     la base de tu PC, para cargar los datos por primera vez en Railway)."""
@@ -170,7 +172,7 @@ def restaurar():
 
 
 @bp.route("/reiniciar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("datos")
 def reiniciar():
     if not current_app.config["PERMITIR_REINICIO"]:
         flash("Reiniciar la base está deshabilitado en este entorno (para evitar borrados accidentales en producción).", "error")

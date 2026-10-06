@@ -8,6 +8,37 @@ from .db import get_db
 
 bp = Blueprint("auth", __name__)
 
+ROLES = {
+    "supervisor": "Supervisor",
+    "facturador": "Facturador",
+    "admin": "Admin",
+    "super_admin": "Super Admin",
+}
+TODOS = set(ROLES)
+BASICOS = {"supervisor", "facturador"}
+ADMINS = {"admin", "super_admin"}
+
+# Qué rol puede qué. Para cambiar quién ve o hace algo, se edita SOLO aquí.
+PERMISOS = {
+    # Operación diaria: todos los roles
+    "escanear": TODOS,                  # Salida y Retorno
+    "dashboard": TODOS,
+    "pendientes": TODOS,
+    "mantenimiento": TODOS,
+    "conteo_escanear": TODOS,
+    "inventario_ver": TODOS,            # solo lectura
+    # Gestión: Admin y Super Admin
+    "inventario_editar": ADMINS,
+    "bitacora": ADMINS,                 # incluye exportar a Excel
+    "historial": ADMINS,
+    "etiquetas": ADMINS,
+    "conteo_gestionar": ADMINS,         # iniciar, cerrar y ajustar un conteo
+    "cerrar_dia": ADMINS,
+    "usuarios": ADMINS,                 # un Admin solo gestiona Supervisores y Facturadores
+    # Solo Super Admin
+    "datos": {"super_admin"},           # respaldos, restaurar, reiniciar, importar Excel
+}
+
 
 class Usuario(UserMixin):
     def __init__(self, id_: int, nombre: str, rol: str):
@@ -26,15 +57,27 @@ def cargar_usuario(usuario_id: str):
     return Usuario(fila["id"], fila["nombre"], fila["rol"]) if fila else None
 
 
-def requiere_admin(vista):
-    @wraps(vista)
-    @login_required
-    def envoltura(*args, **kwargs):
-        if current_user.rol != "admin":
-            abort(403)
-        return vista(*args, **kwargs)
+def puede(permiso: str) -> bool:
+    return current_user.is_authenticated and current_user.rol in PERMISOS[permiso]
 
-    return envoltura
+
+def requiere_permiso(permiso: str):
+    def decorador(vista):
+        @wraps(vista)
+        @login_required
+        def envoltura(*args, **kwargs):
+            if current_user.rol not in PERMISOS[permiso]:
+                abort(403)
+            return vista(*args, **kwargs)
+
+        return envoltura
+
+    return decorador
+
+
+# Compatibilidad: "admin" a secas = Admin o Super Admin.
+requiere_admin = requiere_permiso("inventario_editar")
+requiere_super_admin = requiere_permiso("datos")
 
 
 @bp.route("/login", methods=["GET", "POST"])

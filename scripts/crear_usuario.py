@@ -35,8 +35,8 @@ def main() -> None:
         return
 
     rol = ""
-    while rol not in ("admin", "operador"):
-        rol = input("Rol (admin/operador): ").strip().lower()
+    while rol not in ("supervisor", "facturador", "admin", "super_admin"):
+        rol = input("Rol (supervisor/facturador/admin/super_admin): ").strip().lower()
 
     password = getpass.getpass("Contraseña: ")
     if len(password) < 4:

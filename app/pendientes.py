@@ -1,13 +1,13 @@
 from flask import Blueprint, render_template, request
+from flask_login import login_required
 
-from .auth import requiere_admin
 from .db import get_db
 
 bp = Blueprint("pendientes", __name__, url_prefix="/pendientes")
 
 
 @bp.route("/")
-@requiere_admin
+@login_required
 def ver():
     supervisor = request.args.get("supervisor", "").strip()
     solo_pendientes = request.args.get("solo") == "pendientes"

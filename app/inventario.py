@@ -1,9 +1,9 @@
 import sqlite3
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
-from .auth import requiere_admin
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("inventario", __name__, url_prefix="/inventario")
@@ -18,7 +18,7 @@ def _siguiente_id_interno(db, tipo: str) -> str:
 
 
 @bp.route("/")
-@requiere_admin
+@login_required
 def listado():
     db = get_db()
     solo_revision = request.args.get("revision") == "1"
@@ -62,7 +62,7 @@ def listado():
 
 
 @bp.route("/nuevo", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def nuevo():
     db = get_db()
     if request.method == "POST":
@@ -96,7 +96,7 @@ def nuevo():
 
 
 @bp.route("/<id_interno>/editar", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def editar(id_interno):
     db = get_db()
     equipo = db.execute("SELECT * FROM equipos WHERE id_interno = ?", (id_interno,)).fetchone()
@@ -157,7 +157,7 @@ def editar(id_interno):
 
 
 @bp.route("/<id_interno>/eliminar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def eliminar(id_interno):
     db = get_db()
     equipo = db.execute("SELECT id FROM equipos WHERE id_interno = ?", (id_interno,)).fetchone()
@@ -175,7 +175,7 @@ def eliminar(id_interno):
 
 
 @bp.route("/rutas", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def rutas():
     db = get_db()
     if request.method == "POST":
@@ -196,7 +196,7 @@ def rutas():
 
 
 @bp.route("/rutas/nueva", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def nueva_ruta():
     db = get_db()
     if request.method == "POST":
@@ -217,7 +217,7 @@ def nueva_ruta():
 
 
 @bp.route("/rutas/<int:ruta_id>/editar", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def editar_ruta(ruta_id):
     db = get_db()
     ruta = db.execute("SELECT * FROM rutas WHERE id = ?", (ruta_id,)).fetchone()
@@ -244,7 +244,7 @@ def editar_ruta(ruta_id):
 
 
 @bp.route("/rutas/<int:ruta_id>/eliminar", methods=["POST"])
-@requiere_admin
+@requiere_permiso("inventario_editar")
 def eliminar_ruta(ruta_id):
     db = get_db()
     ruta = db.execute("SELECT codigo FROM rutas WHERE id = ?", (ruta_id,)).fetchone()

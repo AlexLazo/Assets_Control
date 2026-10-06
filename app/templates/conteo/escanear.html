@@ -54,7 +54,7 @@
   </script>
 </div>
 
-{% if current_user.rol == 'admin' %}
+{% if puede('conteo_gestionar') %}
 <div class="tarjeta">
   <h2>Terminar</h2>
   <p class="ayuda">Al cerrar ya no se pueden agregar más equipos y verás el resultado de la comparación.</p>

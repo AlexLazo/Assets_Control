@@ -4,14 +4,14 @@ from flask import Blueprint, Response, abort, render_template, request
 
 import generar_etiquetas
 
-from .auth import requiere_admin
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("etiquetas", __name__, url_prefix="/admin/etiquetas")
 
 
 @bp.route("/")
-@requiere_admin
+@requiere_permiso("etiquetas")
 def ver():
     db = get_db()
     total = db.execute("SELECT COUNT(*) AS n FROM equipos").fetchone()["n"]
@@ -23,7 +23,7 @@ def ver():
 
 
 @bp.route("/pdf")
-@requiere_admin
+@requiere_permiso("etiquetas")
 def pdf():
     tipo = request.args.get("tipo", "todos")
     solo_revision = request.args.get("revision") == "1"
@@ -31,15 +31,15 @@ def pdf():
     condiciones = []
     parametros = []
     if tipo in ("telefono", "impresora"):
-        condiciones.append("tipo = ?")
+        condiciones.append("e.tipo = ?")
         parametros.append(tipo)
     if solo_revision:
-        condiciones.append("requiere_revision = 1")
+        condiciones.append("e.requiere_revision = 1")
     where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
 
     db = get_db()
     equipos = db.execute(
-        f"SELECT id_interno, tipo FROM equipos {where} ORDER BY id_interno", parametros
+        f"{generar_etiquetas.EQUIPOS_SQL} {where} ORDER BY e.id_interno", parametros
     ).fetchall()
     if not equipos:
         abort(404, "No hay equipos que coincidan con ese filtro.")
@@ -55,7 +55,7 @@ def pdf():
 
 
 @bp.route("/<id_interno>.png")
-@requiere_admin
+@requiere_permiso("etiquetas")
 def png(id_interno):
     db = get_db()
     equipo = db.execute("SELECT id_interno FROM equipos WHERE id_interno = ?", (id_interno,)).fetchone()

@@ -4,7 +4,7 @@
 <h2>Conteo físico</h2>
 <div class="tarjeta">
   <p class="ayuda">Se escanea todo lo que hay físicamente en bodega y el sistema lo compara con lo que cree que debería estar. Lo que aparece y el sistema tenía "en ruta" se puede corregir con un clic; lo que falta queda a la vista.</p>
-  {% if current_user.rol == 'admin' %}
+  {% if puede('conteo_gestionar') %}
   <form method="post" action="{{ url_for('conteo.iniciar') }}">
     <button type="submit">Iniciar conteo nuevo</button>
   </form>

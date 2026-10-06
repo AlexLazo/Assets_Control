@@ -3,45 +3,47 @@
 {% block contenido %}
 <h2>Usuarios</h2>
 <div class="tarjeta">
-  <div class="en-linea" style="justify-content:space-between;">
-    <p class="ayuda" style="margin:0;"><a href="{{ url_for('inventario.listado') }}">&larr; Volver al inventario</a></p>
+  <div class="en-linea" style="justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+    <p class="ayuda" style="margin:0;">
+      {% if current_user.rol == 'super_admin' %}Como Super Admin puedes gestionar todos los roles.{% else %}Como Admin puedes gestionar Supervisores y Facturadores. Los Admin y Super Admin los gestiona un Super Admin.{% endif %}
+    </p>
     <a class="boton" href="{{ url_for('usuarios.nuevo') }}">+ Nuevo usuario</a>
   </div>
 </div>
 
 <div class="tarjeta">
   <table>
-    <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th colspan="3"></th></tr></thead>
+    <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
     <tbody>
       {% for u in usuarios %}
       <tr>
         <td>{{ u['nombre'] }}{% if u['id'] == current_user.id %} <span class="badge en_bodega">tú</span>{% endif %}</td>
         <td>
+          {% if u['gestionable'] and u['id'] != current_user.id %}
           <form method="post" action="{{ url_for('usuarios.cambiar_rol', usuario_id=u['id']) }}">
             <select name="nuevo_rol" onchange="this.form.submit()" style="width:auto; margin-bottom:0; font-size:0.85rem; padding:0.3rem 0.5rem;">
-              <option value="operador" {% if u['rol'] == 'operador' %}selected{% endif %}>Operador</option>
-              <option value="admin" {% if u['rol'] == 'admin' %}selected{% endif %}>Admin</option>
+              {% for r in roles_asignables %}
+              <option value="{{ r }}" {% if u['rol'] == r %}selected{% endif %}>{{ ROLES[r] }}</option>
+              {% endfor %}
+              {% if u['rol'] not in roles_asignables %}<option value="{{ u['rol'] }}" selected>{{ ROLES[u['rol']] }}</option>{% endif %}
             </select>
           </form>
+          {% else %}{{ ROLES[u['rol']] }}{% endif %}
         </td>
         <td>{{ 'Activo' if u['activo'] else 'Inactivo' }}</td>
         <td>
-          <form method="post" action="{{ url_for('usuarios.desactivar', usuario_id=u['id']) }}">
-            <input type="hidden" name="nuevo_activo" value="{{ 0 if u['activo'] else 1 }}">
-            <button type="submit" class="secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;">
-              {{ 'Desactivar' if u['activo'] else 'Activar' }}
-            </button>
-          </form>
-        </td>
-        <td>
-          <a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;"
-             href="{{ url_for('usuarios.resetear_password', usuario_id=u['id']) }}">Resetear contraseña</a>
-        </td>
-        <td>
-          <form method="post" action="{{ url_for('usuarios.eliminar', usuario_id=u['id']) }}"
-                onsubmit="return confirm('¿Eliminar a {{ u['nombre'] }}?');">
-            <button type="submit" class="peligro" style="padding:0.3rem 0.6rem; font-size:0.85rem;">Eliminar</button>
-          </form>
+          {% if u['gestionable'] %}
+          <div class="en-linea" style="flex-wrap:wrap; gap:0.4rem;">
+            <form method="post" action="{{ url_for('usuarios.desactivar', usuario_id=u['id']) }}">
+              <input type="hidden" name="nuevo_activo" value="{{ 0 if u['activo'] else 1 }}">
+              <button type="submit" class="secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;">{{ 'Desactivar' if u['activo'] else 'Activar' }}</button>
+            </form>
+            <a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('usuarios.resetear_password', usuario_id=u['id']) }}">Resetear contraseña</a>
+            <form method="post" action="{{ url_for('usuarios.eliminar', usuario_id=u['id']) }}" onsubmit="return confirm('¿Eliminar a {{ u['nombre'] }}?');">
+              <button type="submit" class="peligro" style="padding:0.3rem 0.6rem; font-size:0.85rem;">Eliminar</button>
+            </form>
+          </div>
+          {% else %}<span class="ayuda" style="margin:0;">Solo un Super Admin</span>{% endif %}
         </td>
       </tr>
       {% endfor %}

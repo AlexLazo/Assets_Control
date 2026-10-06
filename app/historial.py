@@ -2,14 +2,14 @@ from datetime import date, timedelta
 
 from flask import Blueprint, render_template, request
 
-from .auth import requiere_admin
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("historial", __name__, url_prefix="/historial-diario")
 
 
 @bp.route("/")
-@requiere_admin
+@requiere_permiso("historial")
 def ver():
     dias = request.args.get("dias", 30, type=int)
     dias = max(1, min(dias, 90))

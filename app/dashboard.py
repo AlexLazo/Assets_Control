@@ -1,9 +1,9 @@
 from datetime import date, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
-from .auth import requiere_admin
+from .auth import requiere_permiso
 from .db import get_db
 
 bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
@@ -36,7 +36,7 @@ def _historial_movimientos(db, dias: int = 14):
 
 
 @bp.route("/")
-@requiere_admin
+@login_required
 def ver():
     db = get_db()
 
@@ -79,7 +79,7 @@ def ver():
 
 
 @bp.route("/cerrar-dia", methods=["POST"])
-@requiere_admin
+@requiere_permiso("cerrar_dia")
 def cerrar_dia():
     db = get_db()
     hoy = date.today().isoformat()

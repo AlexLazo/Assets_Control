@@ -3,6 +3,14 @@
 {% block contenido %}
 <h2>Datos y respaldos</h2>
 
+{% if persistente %}
+<div class="flash">Almacenamiento: <strong>volumen persistente</strong> en <code>{{ carpeta }}</code>. Los datos sobreviven a cada deploy.</div>
+{% elif produccion %}
+<div class="flash error"><strong>ATENCIÓN:</strong> este servidor NO tiene volumen persistente. Todo lo que se registre se perderá en el próximo deploy. Agrega un Volume en Railway.</div>
+{% else %}
+<div class="flash">Entorno local: los datos viven en <code>{{ carpeta }}</code>.</div>
+{% endif %}
+
 <div class="tarjeta">
   <h2>Estado de la base</h2>
   <table>
