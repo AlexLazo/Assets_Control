@@ -2,9 +2,10 @@ import os
 import secrets
 import sys
 import time
+from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, send_from_directory, url_for
 from flask_login import LoginManager
 
 from . import db as db_module
@@ -94,6 +95,12 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=produccion,
         REMEMBER_COOKIE_SECURE=produccion,
         REMEMBER_COOKIE_HTTPONLY=True,
+        # La sesión caduca tras 12 h sin usar la app (se renueva con cada
+        # petición): alcanza para un turno completo y no queda abierta días en
+        # un teléfono perdido o una PC compartida.
+        REMEMBER_COOKIE_DURATION=timedelta(hours=12),
+        REMEMBER_COOKIE_REFRESH_EACH_REQUEST=True,
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
     )
 
     if produccion:
@@ -149,5 +156,30 @@ def create_app() -> Flask:
 
         get_db().execute("SELECT 1").fetchone()
         return "ok"
+
+    # --- App instalable (PWA): el service worker debe servirse desde la raíz
+    # para poder controlar todo el sitio.
+    estaticos = Path(app.root_path) / "static"
+
+    @app.route("/sw.js")
+    def service_worker():
+        r = send_from_directory(estaticos, "sw.js", mimetype="application/javascript")
+        r.headers["Service-Worker-Allowed"] = "/"
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+    @app.route("/manifest.webmanifest")
+    def manifiesto():
+        return send_from_directory(estaticos, "manifest.webmanifest", mimetype="application/manifest+json")
+
+    @app.after_request
+    def cabeceras_de_seguridad(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        resp.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
+        if produccion:
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=15552000")
+        return resp
 
     return app

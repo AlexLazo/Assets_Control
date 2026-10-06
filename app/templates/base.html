@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block titulo %}Control de Equipos{% endblock %}</title>
+<link rel="manifest" href="{{ url_for('manifiesto') }}">
+<meta name="theme-color" content="#0d1526">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Equipos">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}">
 <style>
   :root {
     color-scheme: dark;
@@ -220,11 +228,11 @@
       {% endif %}
     </nav>
     <div class="usuario-box">
-      <div class="avatar">{{ current_user.nombre[:2]|upper }}</div>
-      <div class="datos">
+      <a href="{{ url_for('auth.cuenta') }}" class="avatar" title="Mi cuenta" style="text-decoration:none;">{{ current_user.nombre[:2]|upper }}</a>
+      <a href="{{ url_for('auth.cuenta') }}" class="datos" title="Mi cuenta" style="text-decoration:none;">
         <div class="nombre">{{ current_user.nombre }}</div>
-        <div class="rol">{{ ROLES[current_user.rol] }}</div>
-      </div>
+        <div class="rol">{{ ROLES[current_user.rol] }} · Mi cuenta</div>
+      </a>
       <form method="post" action="{{ url_for('auth.logout') }}">
         <button type="submit" class="secundario">Salir</button>
       </form>
@@ -242,5 +250,10 @@
     </main>
   </div>
 </div>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("{{ url_for('service_worker') }}").catch(() => {}));
+  }
+</script>
 </body>
 </html>
