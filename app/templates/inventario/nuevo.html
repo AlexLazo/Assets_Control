@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}Nuevo equipo{% endblock %}
+{% block contenido %}
+<h2>Nuevo equipo</h2>
+<div class="tarjeta">
+  <p class="ayuda">El ID interno (TEL-xxx / IMP-xxx) se asigna automáticamente al guardar.</p>
+  <form method="post">
+    <label for="tipo">Tipo</label>
+    <select id="tipo" name="tipo" onchange="document.getElementById('campo-serial').hidden = this.value!=='impresora'; document.getElementById('campo-telefono').hidden = this.value!=='telefono';">
+      <option value="telefono">Teléfono</option>
+      <option value="impresora">Impresora</option>
+    </select>
+
+    <div id="campo-telefono">
+      <label for="numero_telefono">Número de línea</label>
+      <input type="text" id="numero_telefono" name="numero_telefono">
+    </div>
+
+    <div id="campo-serial" hidden>
+      <label for="serial_fabrica">Serial de fábrica</label>
+      <input type="text" id="serial_fabrica" name="serial_fabrica">
+    </div>
+
+    <label for="modelo">Modelo</label>
+    <input type="text" id="modelo" name="modelo">
+
+    <label for="fabricante">Fabricante</label>
+    <input type="text" id="fabricante" name="fabricante">
+
+    <label for="ruta_asignada_id">Ruta asignada</label>
+    <select id="ruta_asignada_id" name="ruta_asignada_id">
+      <option value="">-- Sin asignar --</option>
+      {% for r in rutas %}
+      <option value="{{ r['id'] }}">{{ r['codigo'] }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="estado">Estado</label>
+    <select id="estado" name="estado">
+      <option value="activo">Activo</option>
+      <option value="reparacion">En reparación</option>
+      <option value="baja">Dado de baja</option>
+    </select>
+
+    <label for="notas">Notas</label>
+    <input type="text" id="notas" name="notas">
+
+    <button type="submit">Crear equipo</button>
+    <a class="boton secundario" href="{{ url_for('inventario.listado') }}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

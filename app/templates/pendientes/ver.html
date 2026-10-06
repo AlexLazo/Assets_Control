@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}Pendientes por ruta{% endblock %}
+{% block contenido %}
+<h2>Pendientes por ruta</h2>
+<p class="ayuda">Cada ruta con los equipos que tiene asignados y dónde está cada uno ahora. "Pendiente" = el equipo salió y todavía no registra retorno.</p>
+
+<div class="grid-stats">
+  <div class="stat ambar"><span class="num">{{ total_pendientes }}</span><span class="etiqueta">Equipos pendientes de retorno</span></div>
+  <div class="stat rojo"><span class="num">{{ rutas_con_pendientes }}</span><span class="etiqueta">Rutas con pendientes</span></div>
+  <div class="stat teal"><span class="num">{{ total_rutas - rutas_con_pendientes }}</span><span class="etiqueta">Rutas completas</span></div>
+</div>
+
+<div class="tarjeta">
+  <h2>Por supervisor</h2>
+  <table>
+    <thead><tr><th>Supervisor</th><th>Rutas</th><th>Equipos</th><th>Pendientes</th><th></th></tr></thead>
+    <tbody>
+      {% for s in resumen %}
+      <tr>
+        <td>{{ s['supervisor'] }}</td><td>{{ s['rutas'] }}</td><td>{{ s['equipos'] }}</td>
+        <td><span class="badge {{ 'revision' if s['pendientes'] else 'en_bodega' }}">{{ s['pendientes'] }}</span></td>
+        <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('pendientes.ver', supervisor=s['supervisor']) }}">Ver rutas</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="tarjeta">
+  <form method="get" class="en-linea" style="flex-wrap:wrap;">
+    <select name="supervisor" style="width:auto; margin-bottom:0;" onchange="this.form.submit()">
+      <option value="">Todos los supervisores</option>
+      {% for s in supervisores %}<option value="{{ s }}" {% if s == supervisor %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <label style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+      <input type="checkbox" name="solo" value="pendientes" {% if solo_pendientes %}checked{% endif %} style="width:auto; margin:0;" onchange="this.form.submit()">
+      Solo rutas con pendientes
+    </label>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <table>
+    <thead><tr><th>Ruta</th><th>Supervisor</th><th>Equipos</th><th>Pendientes</th></tr></thead>
+    <tbody>
+      {% for r in rutas %}
+      <tr>
+        <td><strong>{{ r['ruta'] }}</strong></td>
+        <td>{{ r['supervisor'] }}</td>
+        <td>
+          {% for e in r['equipos'] %}
+          <span class="badge {{ e['estado'] }}" title="{{ 'Teléfono' if e['tipo']=='telefono' else 'Impresora' }}">{{ e['id'] }}</span>
+          {% endfor %}
+        </td>
+        <td><span class="badge {{ 'revision' if r['pendientes'] else 'en_bodega' }}">{{ r['pendientes'] }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="ayuda">No hay rutas que coincidan con el filtro.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="ayuda" style="margin:1rem 0 0;">
+    <span class="badge en_ruta">en ruta</span> salió y no ha regresado ·
+    <span class="badge en_bodega">en bodega</span> ·
+    <span class="badge reparacion">reparación</span>
+  </p>
+</div>
+{% endblock %}

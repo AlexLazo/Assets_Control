@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block titulo %}Resultado del conteo{% endblock %}
+{% block contenido %}
+<h2>Conteo #{{ conteo['id'] }}</h2>
+<p class="ayuda">{{ conteo['fecha_inicio'] }} &rarr; {{ conteo['fecha_cierre'] or 'en curso' }} · {{ total }} equipos escaneados</p>
+
+<div class="grid-stats">
+  <div class="stat teal"><span class="num">{{ ok|length }}</span><span class="etiqueta">Coinciden (en bodega)</span></div>
+  <div class="stat ambar"><span class="num">{{ corregir|length }}</span><span class="etiqueta">Estaban "en ruta" pero aparecieron</span></div>
+  <div class="stat rojo"><span class="num">{{ faltantes|length }}</span><span class="etiqueta">Faltan (debían estar en bodega)</span></div>
+  <div class="stat morado"><span class="num">{{ fuera|length }}</span><span class="etiqueta">En reparación / de baja</span></div>
+</div>
+
+{% if conteo['estado'] == 'abierto' %}
+<div class="flash">Este conteo sigue abierto; el resultado puede cambiar si se siguen escaneando equipos.</div>
+{% endif %}
+
+{% if corregir %}
+<div class="tarjeta">
+  <h2>Aparecieron aunque el sistema los tenía en ruta ({{ corregir|length }})</h2>
+  <p class="ayuda">Están físicamente en bodega, así que el sistema estaba desactualizado. Al corregir se registra el retorno de cada uno, atribuido a tu usuario con la nota "Ajuste por conteo físico".</p>
+  {% if conteo['estado'] == 'cerrado' and not conteo['ajuste_aplicado'] %}
+  <form method="post" action="{{ url_for('conteo.ajustar', conteo_id=conteo['id']) }}"
+        onsubmit="return confirm('¿Registrar el retorno de estos {{ corregir|length }} equipos?');">
+    <button type="submit">Registrar retorno de estos {{ corregir|length }} equipos</button>
+  </form>
+  {% elif conteo['ajuste_aplicado'] %}
+  <p class="ayuda" style="margin:0;">Ajuste ya aplicado.</p>
+  {% else %}
+  <p class="ayuda" style="margin:0;">Cierra el conteo para poder aplicar el ajuste.</p>
+  {% endif %}
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta</th></tr></thead>
+    <tbody>{% for e in corregir %}<tr><td>{{ e['id_interno'] }}</td><td>{{ 'Teléfono' if e['tipo']=='telefono' else 'Impresora' }}</td><td>{{ e['ruta'] or '-' }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="tarjeta">
+  <h2>Faltan: el sistema los tiene en bodega y no aparecieron ({{ faltantes|length }})</h2>
+  {% if faltantes %}
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta asignada</th></tr></thead>
+    <tbody>{% for e in faltantes %}<tr><td>{{ e['id_interno'] }}</td><td>{{ 'Teléfono' if e['tipo']=='telefono' else 'Impresora' }}</td><td>{{ e['ruta_asignada'] or '-' }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="ayuda" style="margin:0;">Ninguno.</p>{% endif %}
+</div>
+
+{% if fuera %}
+<div class="tarjeta">
+  <h2>Escaneados pero en reparación o dados de baja ({{ fuera|length }})</h2>
+  <table>
+    <thead><tr><th>Equipo</th><th>Estado en el sistema</th></tr></thead>
+    <tbody>{% for e in fuera %}<tr><td>{{ e['id_interno'] }}</td><td>{{ e['estado'] }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+<p><a class="boton secundario" href="{{ url_for('conteo.ver') }}">&larr; Volver a Conteo</a></p>
+{% endblock %}

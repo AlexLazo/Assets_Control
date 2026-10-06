@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Editar ruta{% endblock %}
+{% block contenido %}
+<h2>Editar ruta</h2>
+<div class="tarjeta">
+  <form method="post">
+    <label for="codigo">Código</label>
+    <input type="text" id="codigo" name="codigo" value="{{ ruta['codigo'] }}">
+
+    <label for="supervisor">Supervisor</label>
+    <input type="text" id="supervisor" name="supervisor" value="{{ ruta['supervisor'] or '' }}">
+
+    <button type="submit">Guardar</button>
+    <a class="boton secundario" href="{{ url_for('inventario.rutas') }}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

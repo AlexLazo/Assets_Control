@@ -1,0 +1,18 @@
+<div id="resultado-scan" class="resultado-scan" hidden></div>
+<p class="contador-turno">Tus escaneos de hoy ({{ etiqueta }}): <strong id="contador-turno">{{ contador }}</strong></p>
+<table>
+  <thead><tr><th>Hora</th><th>Equipo</th><th>Ruta</th></tr></thead>
+  <tbody id="historial-scan">
+    {% for f in ultimos %}<tr><td>{{ f[0] }}</td><td>{{ f[1] }}</td><td>{{ f[2] }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+<script src="{{ url_for('static', filename='js/scan_ajax.js') }}"></script>
+<script>
+  iniciarScanAjax({
+    form: document.getElementById('id_interno').form,
+    input: document.getElementById('id_interno'),
+    banner: document.getElementById('resultado-scan'),
+    contador: document.getElementById('contador-turno'),
+    historial: document.getElementById('historial-scan'),
+  });
+</script>

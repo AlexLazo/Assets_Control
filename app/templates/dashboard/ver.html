@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block titulo %}Dashboard{% endblock %}
+{% block contenido %}
+<h2>Dashboard</h2>
+
+<div class="grid-stats">
+  <div class="stat ambar">
+    <span class="num">{{ en_ruta }}</span>
+    <span class="etiqueta">En ruta</span>
+  </div>
+  <div class="stat teal">
+    <span class="num">{{ en_bodega }}</span>
+    <span class="etiqueta">En bodega</span>
+  </div>
+  <div class="stat rojo">
+    <span class="num">{{ incidencias|length }}</span>
+    <span class="etiqueta">Incidencias abiertas</span>
+  </div>
+  <div class="stat morado">
+    <span class="num">{{ en_reparacion }}</span>
+    <span class="etiqueta"><a href="{{ url_for('mantenimiento.ver') }}" style="color:inherit; text-decoration:none;">En reparación</a></span>
+  </div>
+  <div class="stat azul">
+    <span class="num">{{ total_activos }}</span>
+    <span class="etiqueta">Equipos activos</span>
+  </div>
+</div>
+
+<div class="tarjeta">
+  <h2>Movimientos de los últimos 14 días</h2>
+  <canvas id="grafico-movimientos" height="90"></canvas>
+</div>
+
+<div class="tarjeta">
+  <table>
+    <thead><tr><th>Tipo</th><th>Ubicación</th><th>Cantidad</th></tr></thead>
+    <tbody>
+      {% for f in contadores %}
+      <tr>
+        <td>{{ 'Teléfonos' if f['tipo_equipo'] == 'telefono' else 'Impresoras' }}</td>
+        <td><span class="badge {{ f['ubicacion'] }}">{{ 'En ruta' if f['ubicacion'] == 'en_ruta' else 'En bodega' }}</span></td>
+        <td>{{ f['total'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="tarjeta">
+  <h2>Cerrar el día</h2>
+  <p class="ayuda">Al cerrar el día, cualquier equipo que siga marcado "en ruta" (sin importar desde cuándo) queda registrado como incidencia para revisar.</p>
+  <form method="post" action="{{ url_for('dashboard.cerrar_dia') }}"
+        onsubmit="return confirm('¿Cerrar el día? Se marcará como incidencia cualquier equipo que siga en ruta.');">
+    <button type="submit" class="peligro">Cerrar el día</button>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <h2>Incidencias abiertas ({{ incidencias|length }})</h2>
+  {% if incidencias %}
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta</th><th>Día del cierre</th><th>Detectada</th></tr></thead>
+    <tbody>
+      {% for i in incidencias %}
+      <tr>
+        <td>{{ i['id_interno'] }}</td>
+        <td>{{ 'Teléfono' if i['tipo'] == 'telefono' else 'Impresora' }}</td>
+        <td>{{ i['ruta_codigo'] }}</td>
+        <td>{{ i['fecha'] }}</td>
+        <td>{{ i['fecha_deteccion'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="ayuda" style="margin-bottom:0;">No hay incidencias abiertas.</p>
+  {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<script>
+  new Chart(document.getElementById('grafico-movimientos'), {
+    type: 'line',
+    data: {
+      labels: {{ etiquetas|tojson }},
+      datasets: [
+        {
+          label: 'Salidas',
+          data: {{ salidas|tojson }},
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.12)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 2,
+        },
+        {
+          label: 'Retornos',
+          data: {{ retornos|tojson }},
+          borderColor: '#14b8a6',
+          backgroundColor: 'rgba(20,184,166,0.12)',
+          tension: 0.35,
+          fill: true,
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8b98b3' } },
+      },
+      scales: {
+        x: { ticks: { color: '#8b98b3' }, grid: { color: '#232e47' } },
+        y: { beginAtZero: true, ticks: { color: '#8b98b3', precision: 0 }, grid: { color: '#232e47' } },
+      },
+    },
+  });
+</script>
+{% endblock %}

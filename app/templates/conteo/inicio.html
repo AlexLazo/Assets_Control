@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titulo %}Conteo físico{% endblock %}
+{% block contenido %}
+<h2>Conteo físico</h2>
+<div class="tarjeta">
+  <p class="ayuda">Se escanea todo lo que hay físicamente en bodega y el sistema lo compara con lo que cree que debería estar. Lo que aparece y el sistema tenía "en ruta" se puede corregir con un clic; lo que falta queda a la vista.</p>
+  {% if current_user.rol == 'admin' %}
+  <form method="post" action="{{ url_for('conteo.iniciar') }}">
+    <button type="submit">Iniciar conteo nuevo</button>
+  </form>
+  {% else %}
+  <p class="ayuda" style="margin:0;">No hay un conteo abierto. Pídele a un Admin que lo inicie.</p>
+  {% endif %}
+</div>
+
+{% if historial %}
+<div class="tarjeta">
+  <h2>Conteos anteriores</h2>
+  <table>
+    <thead><tr><th>#</th><th>Inicio</th><th>Cierre</th><th>Escaneados</th><th>Iniciado por</th><th>Ajuste</th><th></th></tr></thead>
+    <tbody>
+      {% for c in historial %}
+      <tr>
+        <td>{{ c['id'] }}</td><td>{{ c['fecha_inicio'] }}</td><td>{{ c['fecha_cierre'] or '-' }}</td>
+        <td>{{ c['total'] }}</td><td>{{ c['inicio_por'] }}</td>
+        <td>{{ 'aplicado' if c['ajuste_aplicado'] else '-' }}</td>
+        <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('conteo.resultado', conteo_id=c['id']) }}">Ver resultado</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

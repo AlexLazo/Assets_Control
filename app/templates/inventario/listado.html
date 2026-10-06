@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Inventario{% endblock %}
+{% block contenido %}
+<h2>Inventario</h2>
+<div class="tarjeta">
+  <p class="ayuda">
+    <a href="{{ url_for('inventario.listado') }}">Todos ({{ equipos|length }})</a> ·
+    <a href="{{ url_for('inventario.listado', revision=1) }}">Pendientes de revisión ({{ total_revision }})</a> ·
+    <a href="{{ url_for('inventario.listado', sin_ruta=1) }}">Sin ruta asignada ({{ total_sin_ruta }})</a> ·
+    <a href="{{ url_for('inventario.rutas') }}">Rutas</a> ·
+    <a href="{{ url_for('usuarios.listado') }}">Usuarios</a>
+  </p>
+  <div class="en-linea" style="justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+    <form method="get" class="en-linea">
+      {% if solo_revision %}<input type="hidden" name="revision" value="1">{% endif %}
+      {% if solo_sin_ruta %}<input type="hidden" name="sin_ruta" value="1">{% endif %}
+      <input type="text" name="buscar" value="{{ buscar }}" placeholder="Buscar por ID, serial o número..." style="margin-bottom:0;">
+      <button type="submit">Buscar</button>
+    </form>
+    <a class="boton" href="{{ url_for('inventario.nuevo') }}">+ Nuevo equipo</a>
+  </div>
+</div>
+
+<div class="tarjeta">
+  <table>
+    <thead><tr><th>ID</th><th>Tipo</th><th>Modelo</th><th>Estado</th><th>Ubicación</th><th>Ruta asignada</th><th colspan="2"></th></tr></thead>
+    <tbody>
+      {% for e in equipos %}
+      <tr>
+        <td>{{ e['id_interno'] }}{% if e['requiere_revision'] %} <span class="badge revision">revisar</span>{% endif %}</td>
+        <td>{{ 'Teléfono' if e['tipo'] == 'telefono' else 'Impresora' }}</td>
+        <td>{{ e['modelo'] or '-' }}</td>
+        <td>{{ e['estado'] }}</td>
+        <td>{% if e['ubicacion'] %}<span class="badge {{ e['ubicacion'] }}">{{ 'En ruta' if e['ubicacion'] == 'en_ruta' else 'En bodega' }}</span>{% endif %}</td>
+        <td>{% if e['ruta_asignada_codigo'] %}{{ e['ruta_asignada_codigo'] }}{% else %}<span class="badge revision">sin asignar</span>{% endif %}</td>
+        <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('inventario.editar', id_interno=e['id_interno']) }}">Editar</a></td>
+        <td>
+          <form method="post" action="{{ url_for('inventario.eliminar', id_interno=e['id_interno']) }}"
+                onsubmit="return confirm('¿Eliminar {{ e['id_interno'] }}? Solo funciona si nunca tuvo movimientos.');">
+            <button type="submit" class="peligro" style="padding:0.3rem 0.6rem; font-size:0.85rem;">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Iniciar sesión{% endblock %}
+{% block contenido %}
+<div class="tarjeta">
+  <h2>Iniciar sesión</h2>
+  <p class="ayuda">Inicia sesión una vez al empezar tu turno. Todo lo que registres después queda a tu nombre hasta que cierres sesión.</p>
+  <form method="post">
+    <label for="nombre">Usuario</label>
+    <input type="text" id="nombre" name="nombre" autocomplete="username" autofocus>
+
+    <label for="password">Contraseña</label>
+    <input type="password" id="password" name="password" autocomplete="current-password">
+
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

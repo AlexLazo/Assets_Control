@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Retorno{% endblock %}
+{% block contenido %}
+<div class="tarjeta">
+  <h2>Registrar retorno</h2>
+  <p class="ayuda">La ruta se detecta automáticamente a partir de la última salida del equipo -- no hace falta seleccionarla.</p>
+  <form method="post">
+    <label for="id_interno">Código del equipo (QR o texto)</label>
+    <input type="text" id="id_interno" name="id_interno" autocomplete="off" autofocus>
+    <button type="submit">Registrar retorno</button>
+  </form>
+
+  <button type="button" id="btn-camara" class="secundario">📷 Escanear con cámara</button>
+  <div id="camara-contenedor" hidden style="margin-top:0.75rem;">
+    <video id="camara-video" playsinline autoplay muted style="width:100%; max-width:360px; border-radius:8px; display:block;"></video>
+    <button type="button" id="btn-cancelar-camara" class="secundario" style="margin-top:0.5rem;">Cancelar</button>
+  </div>
+  <canvas id="camara-canvas" hidden></canvas>
+  <p id="camara-mensaje" class="flash error" hidden></p>
+
+  <script src="{{ url_for('static', filename='js/jsqr.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/escaner_camara.js') }}"></script>
+  <script>
+    iniciarEscanerCamara({
+      botonActivar: document.getElementById('btn-camara'),
+      botonCancelar: document.getElementById('btn-cancelar-camara'),
+      video: document.getElementById('camara-video'),
+      canvas: document.getElementById('camara-canvas'),
+      contenedor: document.getElementById('camara-contenedor'),
+      input: document.getElementById('id_interno'),
+      form: document.getElementById('id_interno').form,
+      mensaje: document.getElementById('camara-mensaje'),
+    });
+  </script>
+</div>
+
+<div class="tarjeta">
+  {% set etiqueta = 'retornos' %}
+  {% include 'escaneo/_panel.html' %}
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva ruta{% endblock %}
+{% block contenido %}
+<h2>Nueva ruta</h2>
+<div class="tarjeta">
+  <form method="post">
+    <label for="codigo">Código</label>
+    <input type="text" id="codigo" name="codigo" placeholder="DS0100" autofocus>
+
+    <label for="supervisor">Supervisor</label>
+    <input type="text" id="supervisor" name="supervisor">
+
+    <button type="submit">Crear ruta</button>
+    <a class="boton secundario" href="{{ url_for('inventario.rutas') }}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

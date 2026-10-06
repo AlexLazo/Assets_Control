@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Conteo físico{% endblock %}
+{% block contenido %}
+<div class="tarjeta">
+  <h2>Conteo en curso (#{{ conteo['id'] }})</h2>
+  <p class="ayuda">Escanea cada equipo que tengas físicamente en bodega. No importa el orden; los repetidos se ignoran.</p>
+  <form method="post" action="{{ url_for('conteo.escanear') }}">
+    <label for="id_interno">Código del equipo (QR o texto)</label>
+    <input type="text" id="id_interno" name="id_interno" autocomplete="off" autofocus>
+    <button type="submit">Contar</button>
+  </form>
+
+  <button type="button" id="btn-camara" class="secundario">📷 Escanear con cámara</button>
+  <div id="camara-contenedor" hidden style="margin-top:0.75rem;">
+    <video id="camara-video" playsinline autoplay muted style="width:100%; max-width:360px; border-radius:8px; display:block;"></video>
+    <button type="button" id="btn-cancelar-camara" class="secundario" style="margin-top:0.5rem;">Cancelar</button>
+  </div>
+  <canvas id="camara-canvas" hidden></canvas>
+  <p id="camara-mensaje" class="flash error" hidden></p>
+  <script src="{{ url_for('static', filename='js/jsqr.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/escaner_camara.js') }}"></script>
+  <script>
+    iniciarEscanerCamara({
+      botonActivar: document.getElementById('btn-camara'),
+      botonCancelar: document.getElementById('btn-cancelar-camara'),
+      video: document.getElementById('camara-video'),
+      canvas: document.getElementById('camara-canvas'),
+      contenedor: document.getElementById('camara-contenedor'),
+      input: document.getElementById('id_interno'),
+      form: document.getElementById('id_interno').form,
+      mensaje: document.getElementById('camara-mensaje'),
+    });
+  </script>
+</div>
+
+<div class="tarjeta">
+  <div id="resultado-scan" class="resultado-scan" hidden></div>
+  <p class="contador-turno">Equipos contados: <strong id="contador-turno">{{ total }}</strong></p>
+  <table>
+    <thead><tr><th>Hora</th><th>Equipo</th><th>El sistema lo tiene</th></tr></thead>
+    <tbody id="historial-scan">
+      {% for f in ultimos %}<tr><td>{{ f[0] }}</td><td>{{ f[1] }}</td><td>{{ f[2] }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <script src="{{ url_for('static', filename='js/scan_ajax.js') }}"></script>
+  <script>
+    iniciarScanAjax({
+      form: document.getElementById('id_interno').form,
+      input: document.getElementById('id_interno'),
+      banner: document.getElementById('resultado-scan'),
+      contador: document.getElementById('contador-turno'),
+      historial: document.getElementById('historial-scan'),
+    });
+  </script>
+</div>
+
+{% if current_user.rol == 'admin' %}
+<div class="tarjeta">
+  <h2>Terminar</h2>
+  <p class="ayuda">Al cerrar ya no se pueden agregar más equipos y verás el resultado de la comparación.</p>
+  <form method="post" action="{{ url_for('conteo.cerrar', conteo_id=conteo['id']) }}"
+        onsubmit="return confirm('¿Cerrar el conteo? Ya no se podrán contar más equipos.');">
+    <button type="submit" class="peligro">Cerrar conteo y ver resultado</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

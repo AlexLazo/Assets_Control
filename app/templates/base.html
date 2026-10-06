@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Control de Equipos{% endblock %}</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b1120;
+    --bg-sidebar: #0d1526;
+    --bg-card: #141c30;
+    --bg-card-soft: #101828;
+    --border: #232e47;
+    --text: #e8edf7;
+    --text-muted: #8b98b3;
+    --accent: #3b82f6;
+    --accent-dark: #2563eb;
+    --teal: #14b8a6;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    margin: 0; background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 250px; flex-shrink: 0; background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 1.4rem 1.1rem;
+  }
+  .sidebar .marca {
+    display: flex; align-items: center; gap: 0.6rem;
+    font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em;
+    text-decoration: none; color: var(--text); margin-bottom: 2rem; padding: 0 0.3rem;
+  }
+  .sidebar .marca .icono-marca {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .sidebar nav { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+  .sidebar nav a {
+    display: flex; align-items: center; gap: 0.8rem;
+    padding: 0.7rem 0.85rem; border-radius: 10px;
+    color: var(--text-muted); text-decoration: none;
+    font-size: 0.94rem; font-weight: 500; transition: background 0.12s, color 0.12s;
+  }
+  .sidebar nav a svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar nav a:hover { background: var(--bg-card); color: var(--text); }
+  .sidebar nav a.activo { background: var(--accent); color: white; }
+  .sidebar nav .separador { height: 1px; background: var(--border); margin: 0.7rem 0.3rem; }
+  .sidebar .usuario-box {
+    border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .sidebar .usuario-box .avatar {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--bg-card);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;
+    flex-shrink: 0; color: var(--text);
+  }
+  .sidebar .usuario-box .datos { flex: 1; min-width: 0; }
+  .sidebar .usuario-box .nombre { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sidebar .usuario-box .rol { font-size: 0.76rem; color: var(--text-muted); }
+  .sidebar .usuario-box button {
+    background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+    padding: 0.35rem 0.6rem; font-size: 0.78rem; border-radius: 8px;
+  }
+  .sidebar .usuario-box button:hover { background: var(--bg-card); color: var(--text); }
+
+  .main-area { flex: 1; min-width: 0; }
+  main { padding: 2.2rem 2.5rem 4rem; max-width: 1180px; margin: 0 auto; }
+  main.centrado { max-width: 420px; padding-top: 8vh; }
+
+  h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 1.3rem; margin: 0 0 0.9rem; }
+
+  .tarjeta {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; box-shadow: 0 8px 24px rgba(0,0,0,0.25); margin-bottom: 1.5rem;
+  }
+
+  .flash { background: rgba(245,158,11,0.12); border: 1px solid var(--amber); color: #fde8c4; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; }
+  .flash.error { background: rgba(239,68,68,0.12); border-color: var(--red); color: #fecaca; }
+
+  label { font-weight: 600; display: block; margin-bottom: 0.35rem; font-size: 0.92rem; color: var(--text-muted); }
+  input[type=text], input[type=password], input[type=date], input[type=number], select {
+    font-size: 1.05rem; padding: 0.65rem 0.8rem; width: 100%;
+    background: var(--bg-card-soft); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; margin-bottom: 1rem; outline: none; transition: border-color 0.12s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select { appearance: auto; }
+
+  button, .boton {
+    font-size: 0.98rem; font-weight: 600; padding: 0.7rem 1.2rem; border-radius: 10px; border: none;
+    background: var(--accent); color: white; cursor: pointer; text-decoration: none; display: inline-block;
+    transition: background 0.12s, transform 0.05s;
+  }
+  button:hover, .boton:hover { background: var(--accent-dark); }
+  button:active, .boton:active { transform: scale(0.98); }
+  button.secundario, .boton.secundario { background: var(--bg-card-soft); color: var(--text); border: 1px solid var(--border); }
+  button.secundario:hover, .boton.secundario:hover { background: var(--border); }
+  button.peligro, .boton.peligro { background: var(--red); }
+  button.peligro:hover, .boton.peligro:hover { background: #dc2626; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 0.65rem 0.7rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+  .badge.en_ruta { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .badge.en_bodega { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .badge.reparacion { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+  .badge.revision { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  .resultado-scan { font-size: 1.35rem; font-weight: 700; padding: 1.1rem 1.25rem; border-radius: 12px; margin: 0.25rem 0 1rem; line-height: 1.3; }
+  .resultado-scan.ok { background: rgba(34,197,94,0.18); border: 2px solid var(--green); color: #bbf7d0; }
+  .resultado-scan.error { background: rgba(239,68,68,0.18); border: 2px solid var(--red); color: #fecaca; }
+  .contador-turno { color: var(--text-muted); margin: 0 0 0.75rem; }
+  .contador-turno strong { color: var(--text); font-size: 1.3rem; }
+  .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat {
+    border-radius: var(--radius); padding: 1.25rem 1.4rem; color: white;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25); position: relative; overflow: hidden;
+  }
+  .stat .num { font-size: 2rem; font-weight: 800; display: block; line-height: 1.1; }
+  .stat .etiqueta { font-size: 0.88rem; opacity: 0.9; margin-top: 0.3rem; }
+  .stat.teal { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+  .stat.azul { background: linear-gradient(135deg, #1d4ed8, #3b82f6); }
+  .stat.ambar { background: linear-gradient(135deg, #b45309, #f59e0b); }
+  .stat.verde { background: linear-gradient(135deg, #15803d, #22c55e); }
+  .stat.rojo { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+  .stat.morado { background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
+
+  .grid-botones { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .grid-botones button { min-width: 140px; }
+  form.en-linea { display: flex; gap: 0.5rem; align-items: center; }
+  .ayuda { color: var(--text-muted); font-size: 0.88rem; margin-top: -0.6rem; margin-bottom: 1rem; }
+
+  @media (max-width: 860px) {
+    .app-shell { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 0.7rem 1rem; overflow-x: auto; gap: 0.5rem; }
+    .sidebar .marca { margin-bottom: 0; margin-right: 0.5rem; }
+    .sidebar nav { flex-direction: row; flex: none; }
+    .sidebar nav .separador { display: none; }
+    .sidebar nav a span { display: none; }
+    .sidebar .usuario-box { border-top: none; margin-top: 0; padding-top: 0; margin-left: auto; }
+    .sidebar .usuario-box .datos { display: none; }
+    main { padding: 1.25rem 1rem 3rem; }
+  }
+</style>
+</head>
+<body>
+{% macro icono(nombre) -%}
+{% if nombre == 'salida' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+{%- elif nombre == 'retorno' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+{%- elif nombre == 'dashboard' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+{%- elif nombre == 'bitacora' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+{%- elif nombre == 'inventario' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+{%- elif nombre == 'usuarios' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+{%- elif nombre == 'etiquetas' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
+{%- elif nombre == 'datos' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+{%- elif nombre == 'historial-diario' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+{%- elif nombre == 'conteo' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+{%- elif nombre == 'pendientes' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1" fill="currentColor"/><circle cx="3.5" cy="12" r="1" fill="currentColor"/><circle cx="3.5" cy="18" r="1" fill="currentColor"/></svg>
+{%- elif nombre == 'mantenimiento' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+{%- endif %}
+{%- endmacro %}
+<div class="app-shell">
+  {% if current_user.is_authenticated %}
+  <aside class="sidebar">
+    <a class="marca" href="{{ url_for('escaneo.salida') }}">
+      <span class="icono-marca">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      </span>
+      Control de Equipos
+    </a>
+    <nav>
+      <a href="{{ url_for('escaneo.salida') }}" class="{{ 'activo' if request.endpoint == 'escaneo.salida' }}">{{ icono('salida') }}<span>Salida</span></a>
+      <a href="{{ url_for('escaneo.retorno') }}" class="{{ 'activo' if request.endpoint == 'escaneo.retorno' }}">{{ icono('retorno') }}<span>Retorno</span></a>
+      <a href="{{ url_for('conteo.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('conteo.') }}">{{ icono('conteo') }}<span>Conteo</span></a>
+      {% if current_user.rol == 'admin' %}
+      <div class="separador"></div>
+      <a href="{{ url_for('pendientes.ver') }}" class="{{ 'activo' if request.endpoint == 'pendientes.ver' }}">{{ icono('pendientes') }}<span>Pendientes</span></a>
+      <a href="{{ url_for('dashboard.ver') }}" class="{{ 'activo' if request.endpoint == 'dashboard.ver' }}">{{ icono('dashboard') }}<span>Dashboard</span></a>
+      <a href="{{ url_for('bitacora.ver') }}" class="{{ 'activo' if request.endpoint == 'bitacora.ver' }}">{{ icono('bitacora') }}<span>Bitácora</span></a>
+      <a href="{{ url_for('inventario.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('inventario.') }}">{{ icono('inventario') }}<span>Inventario</span></a>
+      <a href="{{ url_for('usuarios.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('usuarios.') }}">{{ icono('usuarios') }}<span>Usuarios</span></a>
+      <a href="{{ url_for('historial.ver') }}" class="{{ 'activo' if request.endpoint == 'historial.ver' }}">{{ icono('historial-diario') }}<span>Historial diario</span></a>
+      <a href="{{ url_for('mantenimiento.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('mantenimiento.') }}">{{ icono('mantenimiento') }}<span>Mantenimiento</span></a>
+      <div class="separador"></div>
+      <a href="{{ url_for('etiquetas.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('etiquetas.') }}">{{ icono('etiquetas') }}<span>Etiquetas QR</span></a>
+      <a href="{{ url_for('datos.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('datos.') }}">{{ icono('datos') }}<span>Importar datos</span></a>
+      {% endif %}
+    </nav>
+    <div class="usuario-box">
+      <div class="avatar">{{ current_user.nombre[:2]|upper }}</div>
+      <div class="datos">
+        <div class="nombre">{{ current_user.nombre }}</div>
+        <div class="rol">{{ 'Admin' if current_user.rol == 'admin' else 'Operador' }}</div>
+      </div>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <button type="submit" class="secundario">Salir</button>
+      </form>
+    </div>
+  </aside>
+  {% endif %}
+  <div class="main-area">
+    <main class="{{ '' if current_user.is_authenticated else 'centrado' }}">
+      {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% for categoria, mensaje in mensajes %}
+          <div class="flash {{ categoria }}">{{ mensaje }}</div>
+        {% endfor %}
+      {% endwith %}
+      {% block contenido %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

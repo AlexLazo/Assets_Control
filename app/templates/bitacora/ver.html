@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block titulo %}Bitácora{% endblock %}
+{% block contenido %}
+<div class="tarjeta">
+  <h2>Filtros</h2>
+  <form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items:end;">
+    <div>
+      <label for="equipo">Equipo</label>
+      <input type="text" id="equipo" name="equipo" value="{{ filtros['equipo'] }}" placeholder="TEL-001">
+    </div>
+    <div>
+      <label for="ruta">Ruta</label>
+      <input type="text" id="ruta" name="ruta" value="{{ filtros['ruta'] }}" placeholder="DS0001">
+    </div>
+    <div>
+      <label for="tipo_equipo">Tipo de equipo</label>
+      <select id="tipo_equipo" name="tipo_equipo">
+        <option value="" {% if not filtros['tipo_equipo'] %}selected{% endif %}>Todos</option>
+        <option value="telefono" {% if filtros['tipo_equipo'] == 'telefono' %}selected{% endif %}>Teléfonos</option>
+        <option value="impresora" {% if filtros['tipo_equipo'] == 'impresora' %}selected{% endif %}>Impresoras</option>
+      </select>
+    </div>
+    <div>
+      <label for="tipo_movimiento">Movimiento</label>
+      <select id="tipo_movimiento" name="tipo_movimiento">
+        <option value="" {% if not filtros['tipo_movimiento'] %}selected{% endif %}>Todos</option>
+        <option value="salida" {% if filtros['tipo_movimiento'] == 'salida' %}selected{% endif %}>Salida</option>
+        <option value="retorno" {% if filtros['tipo_movimiento'] == 'retorno' %}selected{% endif %}>Retorno</option>
+      </select>
+    </div>
+    <div>
+      <label for="desde">Desde</label>
+      <input type="date" id="desde" name="desde" value="{{ filtros['desde'] }}">
+    </div>
+    <div>
+      <label for="hasta">Hasta</label>
+      <input type="date" id="hasta" name="hasta" value="{{ filtros['hasta'] }}">
+    </div>
+    <div>
+      <button type="submit">Filtrar</button>
+    </div>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <h2>Movimientos ({{ movimientos|length }}{% if movimientos|length == 500 %}+{% endif %})</h2>
+  <table>
+    <thead><tr><th>Fecha/hora</th><th>Equipo</th><th>Tipo</th><th>Movimiento</th><th>Ruta</th><th>Operador</th><th>Observación</th></tr></thead>
+    <tbody>
+      {% for m in movimientos %}
+      <tr>
+        <td>{{ m['timestamp'] }}</td>
+        <td>{{ m['id_interno'] }}</td>
+        <td>{{ 'Teléfono' if m['tipo_equipo'] == 'telefono' else 'Impresora' }}</td>
+        <td><span class="badge {{ 'en_ruta' if m['tipo'] == 'salida' else 'en_bodega' }}">{{ 'Salida' if m['tipo'] == 'salida' else 'Retorno' }}</span></td>
+        <td>{{ m['ruta_codigo'] }}</td>
+        <td>{{ m['operador_nombre'] }}</td>
+        <td>{{ m['condicion'] or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

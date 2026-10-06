@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titulo %}Mantenimiento{% endblock %}
+{% block contenido %}
+<h2>Mantenimiento</h2>
+
+<div class="tarjeta">
+  <h2>Enviar equipo a mantenimiento</h2>
+  <p class="ayuda">Si el equipo estaba en ruta, se le registra el retorno automáticamente -- no puede estar "en ruta" y "en reparación" a la vez.</p>
+  <form method="post" action="{{ url_for('mantenimiento.enviar') }}" class="en-linea" style="flex-wrap:wrap;">
+    <input type="text" name="id_interno" placeholder="Código del equipo (QR o texto)" autocomplete="off" style="width:auto; flex:1; min-width:180px; margin-bottom:0;">
+    <input type="text" name="motivo" placeholder="Motivo (opcional)" style="width:auto; flex:2; min-width:220px; margin-bottom:0;">
+    <button type="submit">Enviar a mantenimiento</button>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <h2>En reparación ahora ({{ en_reparacion|length }})</h2>
+  {% if en_reparacion %}
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Desde</th><th>Días</th><th>Motivo</th><th colspan="2"></th></tr></thead>
+    <tbody>
+      {% for m in en_reparacion %}
+      <tr>
+        <td>{{ m['id_interno'] }}</td>
+        <td>{{ 'Teléfono' if m['tipo'] == 'telefono' else 'Impresora' }}</td>
+        <td>{{ m['fecha_envio'] }}</td>
+        <td><span class="badge {{ 'revision' if m['dias'] >= 7 else 'en_ruta' }}">{{ m['dias'] }} día{{ 's' if m['dias'] != 1 }}</span></td>
+        <td>{{ m['motivo'] or '-' }}</td>
+        <td colspan="2">
+          <form method="post" action="{{ url_for('mantenimiento.regreso', mantenimiento_id=m['id']) }}" class="en-linea">
+            <input type="text" name="resultado" placeholder="Resultado (opcional)" style="width:auto; margin-bottom:0; font-size:0.85rem; padding:0.35rem 0.5rem;">
+            <select name="nuevo_estado" style="width:auto; margin-bottom:0; font-size:0.85rem; padding:0.35rem 0.5rem;">
+              <option value="activo">Regresa activo</option>
+              <option value="baja">Se da de baja</option>
+            </select>
+            <button type="submit" style="padding:0.35rem 0.6rem; font-size:0.85rem;">Regresó</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="ayuda" style="margin-bottom:0;">No hay equipos en reparación.</p>
+  {% endif %}
+</div>
+
+<div class="tarjeta">
+  <h2>Historial (últimos 100)</h2>
+  {% if historial %}
+  <table>
+    <thead><tr><th>Equipo</th><th>Envío</th><th>Retorno</th><th>Días</th><th>Motivo</th><th>Resultado</th></tr></thead>
+    <tbody>
+      {% for h in historial %}
+      <tr>
+        <td>{{ h['id_interno'] }}</td>
+        <td>{{ h['fecha_envio'] }}</td>
+        <td>{{ h['fecha_retorno'] }}</td>
+        <td>{{ h['dias'] }}</td>
+        <td>{{ h['motivo'] or '-' }}</td>
+        <td>{{ h['resultado'] or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="ayuda" style="margin-bottom:0;">Todavía no hay mantenimientos cerrados.</p>
+  {% endif %}
+</div>
+{% endblock %}

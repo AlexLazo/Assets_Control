@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Historial diario{% endblock %}
+{% block contenido %}
+<h2>Historial diario</h2>
+<p class="ayuda">
+  Salidas y retornos por día. Una diferencia distinta de cero no es automáticamente un error -- una ruta puede
+  tardar más de un día en volver -- pero vale la pena revisar los días con diferencias grandes o repetidas.
+  Las incidencias reales solo se generan al usar "Cerrar el día" en el Dashboard.
+</p>
+
+<div class="tarjeta">
+  <form method="get" class="en-linea">
+    <label for="dias" style="margin:0;">Ver últimos</label>
+    <select id="dias" name="dias" style="width:auto; margin-bottom:0;" onchange="this.form.submit()">
+      {% for opcion in [7, 14, 30, 60, 90] %}
+      <option value="{{ opcion }}" {% if opcion == dias %}selected{% endif %}>{{ opcion }} días</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <table>
+    <thead><tr><th>Día</th><th>Salidas</th><th>Retornos</th><th>Diferencia</th><th>Incidencias generadas</th><th></th></tr></thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>{{ f.dia }}</td>
+        <td>{{ f.salidas }}</td>
+        <td>{{ f.retornos }}</td>
+        <td>
+          {% if f.diferencia != 0 %}
+          <span class="badge {{ 'revision' if f.diferencia > 0 else 'en_bodega' }}">{{ '+' if f.diferencia > 0 }}{{ f.diferencia }}</span>
+          {% else %}0{% endif %}
+        </td>
+        <td>{{ f.incidencias }}</td>
+        <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('bitacora.ver', desde=f.dia, hasta=f.dia) }}">Ver bitácora</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

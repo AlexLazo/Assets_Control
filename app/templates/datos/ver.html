@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Importar datos{% endblock %}
+{% block contenido %}
+<h2>Importar datos</h2>
+
+<div class="tarjeta">
+  <h2>Estado actual</h2>
+  <table>
+    <tbody>
+      <tr><td>Teléfonos en el Excel</td><td>{{ resumen.total_telefonos }} ({{ resumen.telefonos_duplicados }} duplicados)</td></tr>
+      <tr><td>Impresoras (unión de las 3 hojas)</td><td>{{ resumen.total_impresoras }}</td></tr>
+      <tr><td>Impresoras que requieren revisión</td><td>{{ resumen.impresoras_requieren_revision }}</td></tr>
+      <tr><td>RTI SOYAPANGO.xlsx modificado</td><td>{{ fechas_archivos.get('telefonos', 'no encontrado') }}</td></tr>
+      <tr><td>Levantamiento Impresoras.xlsx modificado</td><td>{{ fechas_archivos.get('impresoras', 'no encontrado') }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="tarjeta">
+  <h2>Subir un Excel nuevo</h2>
+  <p class="ayuda">Reemplaza el archivo que usa la reconciliación. Se guarda un respaldo con fecha del archivo anterior antes de sobrescribirlo.</p>
+  <form method="post" action="{{ url_for('datos.subir') }}" enctype="multipart/form-data" class="en-linea" style="flex-wrap:wrap;">
+    <select name="tipo" style="width:auto; margin-bottom:0;">
+      <option value="telefonos">Base de teléfonos (RTI)</option>
+      <option value="impresoras">Base de impresoras</option>
+    </select>
+    <input type="file" name="archivo" accept=".xlsx" style="width:auto; margin-bottom:0;">
+    <button type="submit">Subir</button>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <h2>Actualizar catálogo</h2>
+  <p class="ayuda">Cruza los Excel actuales contra la base: agrega equipos nuevos y actualiza datos de los ya existentes (modelo, fabricante, notas, requiere_revisión). Nunca cambia el id_interno de un equipo ya importado.</p>
+  <form method="post" action="{{ url_for('datos.actualizar_catalogo') }}"
+        onsubmit="return confirm('¿Actualizar el catálogo con los Excel actuales?');">
+    <button type="submit">Actualizar catálogo</button>
+  </form>
+</div>
+
+<div class="tarjeta" style="border-color:var(--red);">
+  <h2 style="color:#f87171;">Zona de riesgo</h2>
+  <p class="ayuda">Borra equipos, rutas, movimientos e incidencias -- toda la operación registrada hasta hoy. Los usuarios NO se tocan. Se guarda un respaldo completo del archivo de base de datos antes de borrar nada, pero recuperarlo requiere reemplazar el archivo manualmente.</p>
+  <form method="post" action="{{ url_for('datos.reiniciar') }}"
+        onsubmit="return confirm('Esto borra TODO el historial de equipos y escaneos. ¿Seguro?');">
+    <label for="confirmacion">Escribe BORRAR para confirmar</label>
+    <input type="text" id="confirmacion" name="confirmacion" autocomplete="off" style="max-width:220px;">
+    <button type="submit" class="peligro">Reiniciar base de datos</button>
+  </form>
+</div>
+{% endblock %}
