@@ -37,6 +37,11 @@ def _directorio_datos(app: Flask, produccion: bool) -> tuple[Path, bool]:
     deploy falla a la vista y Railway deja corriendo la versión anterior) en
     vez de seguir funcionando y perder los datos en silencio."""
     configurado = os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    # En Railway solo cuenta como volumen real el que Railway mismo declara
+    # (RAILWAY_VOLUME_MOUNT_PATH): un DATA_DIR puesto a mano apuntaría al disco
+    # temporal y la protección quedaría engañada.
+    if os.environ.get("RAILWAY_ENVIRONMENT") and not os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+        configurado = None
     if produccion and not configurado and os.environ.get("PERMITIR_SIN_VOLUMEN") != "1":
         raise RuntimeError(
             "PRODUCCIÓN SIN VOLUMEN PERSISTENTE: la base de datos se borraría en cada deploy. "
