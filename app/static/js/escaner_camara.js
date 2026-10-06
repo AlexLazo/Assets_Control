@@ -50,6 +50,7 @@ function iniciarEscanerCamara(opciones) {
           ultimoEn = ahora;
           pausadoHasta = ahora + 1500;
           input.value = codigo.data;
+          if (window.avisoLeido) window.avisoLeido();
           if (form.requestSubmit) form.requestSubmit(); else form.submit();
         }
       }

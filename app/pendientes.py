@@ -34,6 +34,22 @@ def ver():
         if estado == "en_ruta":
             r["pendientes"] += 1
 
+    # Equipos que salieron sin ruta asignada: no pertenecen a ninguna ruta de
+    # arriba, pero siguen fuera y alguien debe regularizarlos.
+    sin_ruta = db.execute(
+        """SELECT e.id_interno, e.tipo FROM equipos e
+           JOIN v_estado_actual v ON v.equipo_id = e.id
+           WHERE e.ruta_asignada_id IS NULL AND e.estado = 'activo' AND v.ubicacion = 'en_ruta'
+           ORDER BY e.id_interno"""
+    ).fetchall()
+    if sin_ruta:
+        rutas[-1] = {
+            "ruta": "SIN RUTA ASIGNADA",
+            "supervisor": "(sin supervisor)",
+            "equipos": [{"id": f["id_interno"], "tipo": f["tipo"], "estado": "en_ruta"} for f in sin_ruta],
+            "pendientes": len(sin_ruta),
+        }
+
     todas = list(rutas.values())
     supervisores = sorted({r["supervisor"] for r in todas})
 

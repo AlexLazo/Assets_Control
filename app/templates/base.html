@@ -126,6 +126,13 @@
 
   .resultado-scan { font-size: 1.35rem; font-weight: 700; padding: 1.1rem 1.25rem; border-radius: 12px; margin: 0.25rem 0 1rem; line-height: 1.3; }
   .resultado-scan.ok { background: rgba(34,197,94,0.18); border: 2px solid var(--green); color: #bbf7d0; }
+  .resultado-scan.aviso { background: rgba(245,158,11,0.2); border: 2px solid var(--amber); color: #fde68a; }
+  .toast-scan { display: none; position: fixed; top: 0.75rem; left: 50%; transform: translateX(-50%); z-index: 1000;
+    width: min(92vw, 560px); padding: 1rem 1.2rem; border-radius: 14px; font-size: 1.2rem; font-weight: 700; line-height: 1.3;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
+  .toast-scan.ok { background: #14532d; border: 2px solid var(--green); color: #dcfce7; }
+  .toast-scan.aviso { background: #78350f; border: 2px solid var(--amber); color: #fef3c7; }
+  .toast-scan.error { background: #7f1d1d; border: 2px solid var(--red); color: #fee2e2; }
   .resultado-scan.error { background: rgba(239,68,68,0.18); border: 2px solid var(--red); color: #fecaca; }
   .contador-turno { color: var(--text-muted); margin: 0 0 0.75rem; }
   .contador-turno strong { color: var(--text); font-size: 1.3rem; }

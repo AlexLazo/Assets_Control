@@ -44,13 +44,22 @@ def _ultimos(db, tipo: str):
     return [[f["hora"], f["id_interno"], f["ruta"]] for f in filas]
 
 
-def _responder(db, tipo: str, endpoint: str, ok: bool, mensaje: str, fila=None):
+def _responder(db, tipo: str, endpoint: str, ok: bool, mensaje: str, fila=None, nivel: str | None = None):
     """Mismo resultado para el formulario normal (flash + redirect) y para el
-    envío rápido sin recargar (JSON que usa scan_ajax.js)."""
+    envío rápido sin recargar (JSON que usa scan_ajax.js). `nivel` puede ser
+    'ok', 'aviso' (se registró, pero con una advertencia) o 'error'."""
+    nivel = nivel or ("ok" if ok else "error")
     if request.headers.get("X-Requested-With") == "fetch":
-        return jsonify(ok=ok, mensaje=mensaje, fila=fila, contador=_contador_turno(db, tipo))
-    flash(mensaje, "message" if ok else "error")
+        return jsonify(ok=ok, nivel=nivel, mensaje=mensaje, fila=fila, contador=_contador_turno(db, tipo))
+    flash(mensaje, "error" if nivel == "error" else "message")
     return redirect(url_for(endpoint))
+
+
+def _ruta_sin_asignar(db) -> int:
+    """Ruta comodín para equipos que salen sin ruta asignada. Está inactiva a
+    propósito para que no aparezca en las listas de rutas al asignar."""
+    db.execute("INSERT OR IGNORE INTO rutas (codigo, supervisor, activa) VALUES ('SIN RUTA', NULL, 0)")
+    return db.execute("SELECT id FROM rutas WHERE codigo = 'SIN RUTA'").fetchone()["id"]
 
 
 @bp.route("/salida", methods=["GET", "POST"])
@@ -63,8 +72,8 @@ def salida():
         if not id_interno:
             return redirect(url_for("escaneo.salida"))
 
-        def resp(ok, mensaje, fila=None):
-            return _responder(db, "salida", "escaneo.salida", ok, mensaje, fila)
+        def resp(ok, mensaje, fila=None, nivel=None):
+            return _responder(db, "salida", "escaneo.salida", ok, mensaje, fila, nivel)
 
         equipo = _buscar_equipo(db, id_interno)
         if equipo is None:
@@ -73,27 +82,28 @@ def salida():
             return resp(False, f"{equipo['id_interno']} está en mantenimiento; no se puede registrar salida.")
         if equipo["estado"] == "baja":
             return resp(False, f"{equipo['id_interno']} está dado de baja; no se puede registrar salida.")
-        if equipo["ruta_asignada_id"] is None:
-            return resp(
-                False,
-                f"{equipo['id_interno']} no tiene ruta asignada todavía. "
-                "Asígnasela desde Inventario → Editar antes de poder escanearlo.",
-            )
+        sin_ruta = equipo["ruta_asignada_id"] is None
+        ruta_id = _ruta_sin_asignar(db) if sin_ruta else equipo["ruta_asignada_id"]
+        ruta_codigo = "SIN RUTA" if sin_ruta else equipo["ruta_asignada_codigo"]
 
         try:
             db.execute(
                 "INSERT INTO movimientos (equipo_id, ruta_id, operador_id, tipo) VALUES (?, ?, ?, 'salida')",
-                (equipo["id"], equipo["ruta_asignada_id"], current_user.id),
+                (equipo["id"], ruta_id, current_user.id),
             )
             db.commit()
         except sqlite3.IntegrityError as e:
             db.rollback()
             return resp(False, f"{equipo['id_interno']}: {e}")
-        return resp(
-            True,
-            f"Salida registrada: {equipo['id_interno']} -> ruta {equipo['ruta_asignada_codigo']}.",
-            [datetime.now().strftime("%H:%M:%S"), equipo["id_interno"], equipo["ruta_asignada_codigo"]],
-        )
+        fila = [datetime.now().strftime("%H:%M:%S"), equipo["id_interno"], ruta_codigo]
+        if sin_ruta:
+            return resp(
+                True,
+                f"Salida registrada SIN RUTA: {equipo['id_interno']}. Quedó a tu nombre; un Admin debe asignarle ruta.",
+                fila,
+                "aviso",
+            )
+        return resp(True, f"Salida registrada: {equipo['id_interno']} -> ruta {ruta_codigo}.", fila)
 
     return render_template("escaneo/salida.html", contador=_contador_turno(db, "salida"), ultimos=_ultimos(db, "salida"))
 
