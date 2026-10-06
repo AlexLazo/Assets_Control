@@ -14,14 +14,19 @@ rompa el script.
 """
 from __future__ import annotations
 
+import os
 import unicodedata
 from pathlib import Path
 
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ARCHIVO_TELEFONOS = BASE_DIR / "RTI SOYAPANGO.xlsx"
-ARCHIVO_IMPRESORAS = BASE_DIR / "Levantamiento Impresoras 2026.xlsx"
+# En el servidor (Railway) los Excel subidos desde la web deben vivir en el
+# volumen persistente, no en la carpeta del código (que se borra en cada deploy).
+_datos = os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+CARPETA_EXCEL = Path(_datos) / "excel" if _datos else BASE_DIR
+ARCHIVO_TELEFONOS = CARPETA_EXCEL / "RTI SOYAPANGO.xlsx"
+ARCHIVO_IMPRESORAS = CARPETA_EXCEL / "Levantamiento Impresoras 2026.xlsx"
 
 # Valores que en "NUEVA RUTA" / "RUTA" significan "todavía sin ruta real",
 # no una ruta válida. Confirmado contra los datos reales (31 + 7 casos).

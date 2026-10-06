@@ -1,5 +1,7 @@
+import os
 import secrets
 import sys
+import time
 from pathlib import Path
 
 from flask import Flask, redirect, url_for
@@ -21,13 +23,29 @@ login_manager.login_view = "auth.login"
 login_manager.login_message = "Inicia sesión para continuar."
 
 
-def _obtener_o_crear_secret_key(instance_path: Path) -> str:
-    """Clave para firmar la cookie de sesión (identifica qué operador está
-    activo en cada navegador). Se genera una sola vez y se guarda en disco
-    para que no cambie entre reinicios del servidor -- si cambiara, todas
-    las estaciones tendrían que volver a elegir operador cada vez que se
-    reinicia la app."""
-    archivo = instance_path / "secret_key.txt"
+def _en_produccion() -> bool:
+    return bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PRODUCCION"))
+
+
+def _directorio_datos(app: Flask) -> Path:
+    """Dónde viven la base, los respaldos y la llave de sesión.
+
+    En Railway TIENE que ser un volumen persistente (RAILWAY_VOLUME_MOUNT_PATH
+    o DATA_DIR): el disco normal del contenedor se borra en cada deploy, y con
+    él se perdería la base. En tu PC sigue siendo la carpeta instance/."""
+    configurado = os.environ.get("DATA_DIR") or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    carpeta = Path(configurado) if configurado else Path(app.instance_path)
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta
+
+
+def _obtener_o_crear_secret_key(carpeta: Path) -> str:
+    """Clave para firmar la cookie de sesión. Prioridad: variable SECRET_KEY;
+    si no existe, un archivo en la carpeta de datos (se genera una sola vez,
+    así las sesiones no se pierden entre reinicios)."""
+    if os.environ.get("SECRET_KEY"):
+        return os.environ["SECRET_KEY"]
+    archivo = carpeta / "secret_key.txt"
     if archivo.exists():
         return archivo.read_text(encoding="utf-8").strip()
     clave = secrets.token_hex(32)
@@ -36,14 +54,45 @@ def _obtener_o_crear_secret_key(instance_path: Path) -> str:
 
 
 def create_app() -> Flask:
+    # Las fechas de la bitácora usan datetime('now','localtime'): en un
+    # servidor en la nube la hora local sería UTC y los cierres de día se
+    # correrían. Se fija la zona de El Salvador salvo que se indique otra.
+    os.environ.setdefault("TZ", "America/El_Salvador")
+    if hasattr(time, "tzset"):
+        time.tzset()
+
     app = Flask(__name__, instance_relative_config=True)
-    instance_path = Path(app.instance_path)
-    instance_path.mkdir(parents=True, exist_ok=True)
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+    produccion = _en_produccion()
+    carpeta = _directorio_datos(app)
 
     app.config.from_mapping(
-        SECRET_KEY=_obtener_o_crear_secret_key(instance_path),
-        DATABASE=str(instance_path / "activos.db"),
+        SECRET_KEY=_obtener_o_crear_secret_key(carpeta),
+        DATA_DIR=str(carpeta),
+        DATABASE=str(carpeta / "activos.db"),
+        PRODUCCION=produccion,
+        # El botón "Reiniciar base de datos" borra todo: en producción queda
+        # apagado salvo que se active a propósito con PERMITIR_REINICIO=1.
+        PERMITIR_REINICIO=os.environ.get("PERMITIR_REINICIO", "0" if produccion else "1") == "1",
+        MAX_CONTENT_LENGTH=100 * 1024 * 1024,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=produccion,
+        REMEMBER_COOKIE_SECURE=produccion,
+        REMEMBER_COOKIE_HTTPONLY=True,
     )
+
+    if produccion:
+        # Railway termina el HTTPS y reenvía por HTTP interno: sin esto Flask
+        # cree que está en http y arma mal los enlaces y las cookies seguras.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    from . import migraciones, respaldos
+
+    migraciones.actualizar(app.config["DATABASE"])
+    migraciones.asegurar_admin(app.config["DATABASE"])
+    respaldos.iniciar(app)
 
     db_module.init_app(app)
     login_manager.init_app(app)
@@ -69,5 +118,13 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         return redirect(url_for("escaneo.salida"))
+
+    @app.route("/salud")
+    def salud():
+        # Sin login: lo usa Railway para saber si la app arrancó bien.
+        from .db import get_db
+
+        get_db().execute("SELECT 1").fetchone()
+        return "ok"
 
     return app

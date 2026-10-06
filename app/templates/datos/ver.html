@@ -1,24 +1,60 @@
 {% extends "base.html" %}
-{% block titulo %}Importar datos{% endblock %}
+{% block titulo %}Datos y respaldos{% endblock %}
 {% block contenido %}
-<h2>Importar datos</h2>
+<h2>Datos y respaldos</h2>
 
 <div class="tarjeta">
-  <h2>Estado actual</h2>
+  <h2>Estado de la base</h2>
   <table>
     <tbody>
-      <tr><td>Teléfonos en el Excel</td><td>{{ resumen.total_telefonos }} ({{ resumen.telefonos_duplicados }} duplicados)</td></tr>
-      <tr><td>Impresoras (unión de las 3 hojas)</td><td>{{ resumen.total_impresoras }}</td></tr>
-      <tr><td>Impresoras que requieren revisión</td><td>{{ resumen.impresoras_requieren_revision }}</td></tr>
-      <tr><td>RTI SOYAPANGO.xlsx modificado</td><td>{{ fechas_archivos.get('telefonos', 'no encontrado') }}</td></tr>
-      <tr><td>Levantamiento Impresoras.xlsx modificado</td><td>{{ fechas_archivos.get('impresoras', 'no encontrado') }}</td></tr>
+      <tr><td>Equipos en la base</td><td>{{ totales.equipos }}</td></tr>
+      <tr><td>Movimientos registrados</td><td>{{ totales.movimientos }}</td></tr>
+      {% if resumen %}
+      <tr><td>Teléfonos en el Excel de origen</td><td>{{ resumen.total_telefonos }} ({{ resumen.telefonos_duplicados }} duplicados)</td></tr>
+      <tr><td>Impresoras en el Excel de origen (unión de hojas)</td><td>{{ resumen.total_impresoras }}</td></tr>
+      {% endif %}
     </tbody>
   </table>
+  {% if not resumen %}
+  <p class="ayuda" style="margin:0.75rem 0 0;">No hay Excel de origen cargados en este servidor (no hace falta si la base ya tiene los equipos).</p>
+  {% endif %}
 </div>
 
 <div class="tarjeta">
-  <h2>Subir un Excel nuevo</h2>
-  <p class="ayuda">Reemplaza el archivo que usa la reconciliación. Se guarda un respaldo con fecha del archivo anterior antes de sobrescribirlo.</p>
+  <h2>Respaldos de la base</h2>
+  <p class="ayuda">El sistema respalda la base solo al arrancar y cada 6 horas (conserva los últimos 30). Descarga uno de vez en cuando y guárdalo <strong>fuera del servidor</strong>: es tu seguro si algo le pasa al volumen.</p>
+  <a class="boton" href="{{ url_for('datos.respaldo_ahora') }}">Descargar respaldo ahora</a>
+  {% if respaldos %}
+  <table style="margin-top:1rem;">
+    <thead><tr><th>Archivo</th><th>Fecha</th><th>MB</th><th></th></tr></thead>
+    <tbody>
+      {% for r in respaldos %}
+      <tr>
+        <td>{{ r.nombre }}</td><td>{{ r.fecha }}</td><td>{{ r.mb }}</td>
+        <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('datos.respaldo_descargar', nombre=r.nombre) }}">Descargar</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="tarjeta">
+  <h2>Restaurar una base de datos</h2>
+  <p class="ayuda">Reemplaza TODO el contenido (equipos, movimientos, usuarios) por el de un archivo <code>.db</code>. Sirve, por ejemplo, para subir a Railway la base que ya tienes en tu PC (<code>instance/activos.db</code>). Antes de reemplazar se guarda un respaldo de lo que había.</p>
+  <form method="post" action="{{ url_for('datos.restaurar') }}" enctype="multipart/form-data"
+        onsubmit="return confirm('Esto reemplaza toda la base actual. ¿Seguro?');">
+    <input type="file" name="archivo" accept=".db,.sqlite,.sqlite3" style="width:auto;">
+    <label for="confirmacion-restaurar">Escribe RESTAURAR para confirmar</label>
+    <input type="text" id="confirmacion-restaurar" name="confirmacion" autocomplete="off" style="max-width:220px;">
+    <button type="submit" class="peligro">Restaurar base</button>
+  </form>
+</div>
+
+{% if resumen or fechas_archivos %}
+<div class="tarjeta">
+  <h2>Subir un Excel de origen</h2>
+  <p class="ayuda">Reemplaza el archivo que usa la reconciliación (se guarda un respaldo con fecha del anterior).</p>
   <form method="post" action="{{ url_for('datos.subir') }}" enctype="multipart/form-data" class="en-linea" style="flex-wrap:wrap;">
     <select name="tipo" style="width:auto; margin-bottom:0;">
       <option value="telefonos">Base de teléfonos (RTI)</option>
@@ -27,25 +63,27 @@
     <input type="file" name="archivo" accept=".xlsx" style="width:auto; margin-bottom:0;">
     <button type="submit">Subir</button>
   </form>
-</div>
-
-<div class="tarjeta">
-  <h2>Actualizar catálogo</h2>
-  <p class="ayuda">Cruza los Excel actuales contra la base: agrega equipos nuevos y actualiza datos de los ya existentes (modelo, fabricante, notas, requiere_revisión). Nunca cambia el id_interno de un equipo ya importado.</p>
+  <h2 style="margin-top:1.5rem;">Actualizar catálogo</h2>
+  <p class="ayuda">Cruza los Excel contra la base: agrega equipos nuevos y actualiza datos de los existentes. Nunca cambia el id_interno de un equipo ya importado.</p>
   <form method="post" action="{{ url_for('datos.actualizar_catalogo') }}"
         onsubmit="return confirm('¿Actualizar el catálogo con los Excel actuales?');">
     <button type="submit">Actualizar catálogo</button>
   </form>
 </div>
+{% endif %}
 
 <div class="tarjeta" style="border-color:var(--red);">
   <h2 style="color:#f87171;">Zona de riesgo</h2>
-  <p class="ayuda">Borra equipos, rutas, movimientos e incidencias -- toda la operación registrada hasta hoy. Los usuarios NO se tocan. Se guarda un respaldo completo del archivo de base de datos antes de borrar nada, pero recuperarlo requiere reemplazar el archivo manualmente.</p>
+  {% if permitir_reinicio %}
+  <p class="ayuda">Borra equipos, rutas, movimientos, incidencias, mantenimientos y conteos -- toda la operación registrada. Los usuarios NO se tocan. Se guarda un respaldo antes de borrar.</p>
   <form method="post" action="{{ url_for('datos.reiniciar') }}"
         onsubmit="return confirm('Esto borra TODO el historial de equipos y escaneos. ¿Seguro?');">
     <label for="confirmacion">Escribe BORRAR para confirmar</label>
     <input type="text" id="confirmacion" name="confirmacion" autocomplete="off" style="max-width:220px;">
     <button type="submit" class="peligro">Reiniciar base de datos</button>
   </form>
+  {% else %}
+  <p class="ayuda" style="margin:0;">Reiniciar la base está <strong>deshabilitado</strong> en este entorno{% if produccion %} (producción){% endif %} para evitar borrados accidentales.</p>
+  {% endif %}
 </div>
 {% endblock %}

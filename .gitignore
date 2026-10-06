@@ -1,0 +1,19 @@
+# Datos y secretos: NUNCA al repositorio (en Railway la base vive en un volumen)
+instance/
+*.db
+*.db-wal
+*.db-shm
+*.pem
+secret_key.txt
+.env
+
+# Excel de origen (traen PIN de los teléfonos) y reportes generados
+*.xlsx
+etiquetas_qr.pdf
+
+# Entorno y basura de Python / herramientas
+venv/
+.venv/
+__pycache__/
+*.pyc
+.claude/
