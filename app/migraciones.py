@@ -19,7 +19,7 @@ from werkzeug.security import generate_password_hash
 
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 
-VERSION_ACTUAL = 2
+VERSION_ACTUAL = 3
 
 # (version, script SQL) -- solo cambios posteriores a la versión 1.
 MIGRACIONES: list[tuple[int, str]] = [
@@ -52,6 +52,23 @@ MIGRACIONES: list[tuple[int, str]] = [
               AND NOT EXISTS (SELECT 1 FROM usuarios WHERE rol = 'super_admin');
         COMMIT;
         PRAGMA foreign_keys = ON;
+        """,
+    ),
+    # v3: registro permanente de los "reinicios de día" (quién borró qué).
+    (
+        3,
+        """
+        CREATE TABLE reinicios (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_accion          TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            dia                   TEXT NOT NULL,
+            usuario_filtro        TEXT,
+            operador_id           INTEGER NOT NULL REFERENCES usuarios(id),
+            movimientos_borrados  INTEGER NOT NULL,
+            incidencias_borradas  INTEGER NOT NULL,
+            respaldo              TEXT,
+            detalle               TEXT
+        );
         """,
     ),
 ]

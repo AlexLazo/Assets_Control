@@ -146,3 +146,15 @@ CREATE TABLE conteo_items (
     timestamp    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     UNIQUE (conteo_id, equipo_id)
 );
+
+CREATE TABLE reinicios (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_accion          TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    dia                   TEXT NOT NULL,
+    usuario_filtro        TEXT,
+    operador_id           INTEGER NOT NULL REFERENCES usuarios(id),
+    movimientos_borrados  INTEGER NOT NULL,
+    incidencias_borradas  INTEGER NOT NULL,
+    respaldo              TEXT,
+    detalle               TEXT
+);

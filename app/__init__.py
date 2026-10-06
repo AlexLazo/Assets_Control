@@ -122,7 +122,7 @@ def create_app() -> Flask:
     login_manager.user_loader(auth.cargar_usuario)
     app.context_processor(lambda: {"puede": auth.puede, "ROLES": auth.ROLES})
 
-    from . import escaneo, dashboard, bitacora, inventario, usuarios, etiquetas, datos, historial, mantenimiento, conteo, pendientes
+    from . import escaneo, dashboard, bitacora, inventario, usuarios, etiquetas, datos, historial, mantenimiento, conteo, pendientes, reinicio_dia
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(escaneo.bp)
@@ -136,6 +136,7 @@ def create_app() -> Flask:
     app.register_blueprint(mantenimiento.bp)
     app.register_blueprint(conteo.bp)
     app.register_blueprint(pendientes.bp)
+    app.register_blueprint(reinicio_dia.bp)
 
     @app.route("/")
     def index():

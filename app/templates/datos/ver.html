@@ -80,6 +80,27 @@
 </div>
 {% endif %}
 
+<div class="tarjeta">
+  <h2>Reiniciar un día</h2>
+  <p class="ayuda">Borra los movimientos de un día (por ejemplo, escaneos de prueba) y cada equipo vuelve al estado que tenía antes. Puedes limitarlo a lo escaneado por un solo usuario. Primero ves qué se borraría; antes de borrar se guarda un respaldo y queda un registro permanente de quién lo hizo.</p>
+  <form method="get" action="{{ url_for('reinicio_dia.vista_previa') }}" class="en-linea" style="flex-wrap:wrap; gap:0.75rem;">
+    <div><label for="dia-reinicio" style="margin-bottom:0.2rem;">Día</label><input type="date" id="dia-reinicio" name="dia" value="{{ hoy }}" style="margin-bottom:0;"></div>
+    <div><label for="usuario-reinicio" style="margin-bottom:0.2rem;">Solo lo de este usuario</label>
+      <select id="usuario-reinicio" name="usuario_id" style="margin-bottom:0;">
+        <option value="">Todos los usuarios</option>
+        {% for u in usuarios %}<option value="{{ u['id'] }}">{{ u['nombre'] }}</option>{% endfor %}
+      </select></div>
+    <button type="submit" style="align-self:flex-end;">Ver qué se borraría</button>
+  </form>
+  {% if reinicios %}
+  <h2 style="margin-top:1.5rem; font-size:1.05rem;">Historial de reinicios</h2>
+  <table>
+    <thead><tr><th>Cuándo</th><th>Día</th><th>Filtro</th><th>Movimientos</th><th>Incidencias</th><th>Lo hizo</th><th>Respaldo previo</th></tr></thead>
+    <tbody>{% for r in reinicios %}<tr><td>{{ r['fecha_accion'] }}</td><td>{{ r['dia'] }}</td><td>{{ r['usuario_filtro'] or 'todos' }}</td><td>{{ r['movimientos_borrados'] }}</td><td>{{ r['incidencias_borradas'] }}</td><td>{{ r['por'] }}</td><td>{{ r['respaldo'] }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+
 <div class="tarjeta" style="border-color:var(--red);">
   <h2 style="color:#f87171;">Zona de riesgo</h2>
   {% if permitir_reinicio %}

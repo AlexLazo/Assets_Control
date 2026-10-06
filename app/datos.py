@@ -54,8 +54,16 @@ def ver():
         {"nombre": r.name, "fecha": datetime.fromtimestamp(r.stat().st_mtime).strftime("%d/%m/%Y %H:%M"), "mb": round(r.stat().st_size / 1_048_576, 2)}
         for r in respaldos.listar(current_app)[:15]
     ]
+    usuarios = db.execute("SELECT id, nombre FROM usuarios WHERE activo = 1 ORDER BY nombre").fetchall()
+    reinicios = db.execute(
+        """SELECT r.fecha_accion, r.dia, r.usuario_filtro, r.movimientos_borrados, r.incidencias_borradas, r.respaldo, u.nombre AS por
+           FROM reinicios r JOIN usuarios u ON u.id = r.operador_id ORDER BY r.id DESC LIMIT 10"""
+    ).fetchall()
     return render_template(
         "datos/ver.html",
+        usuarios=usuarios,
+        reinicios=reinicios,
+        hoy=datetime.now().strftime("%Y-%m-%d"),
         resumen=resumen,
         fechas_archivos=fechas_archivos,
         totales=totales,

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Reiniciar un día{% endblock %}
+{% block contenido %}
+<h2>Reiniciar el día {{ dia }}</h2>
+<p class="ayuda"><a href="{{ url_for('datos.ver') }}">&larr; Volver a Datos y respaldos</a></p>
+
+<div class="tarjeta">
+  <h2>Qué se borraría{% if usuario_nombre %} (solo lo de {{ usuario_nombre }}){% endif %}</h2>
+  {% if total == 0 %}
+  <p class="ayuda" style="margin:0;">No hay movimientos de ese día con ese filtro. No hay nada que borrar. (Las salidas sembradas por la carga inicial desde Excel nunca se tocan.)</p>
+  {% else %}
+  <div class="grid-stats">
+    <div class="stat ambar"><span class="num">{{ total }}</span><span class="etiqueta">Movimientos a borrar</span></div>
+    <div class="stat rojo"><span class="num">{{ c['incidencias']|length }}</span><span class="etiqueta">Incidencias a borrar</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Usuario</th><th>Movimientos</th></tr></thead>
+    <tbody>{% for nombre, n in c['por_usuario'].items() %}<tr><td>{{ nombre }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% if c['problemas'] %}
+<div class="flash error"><strong>No se puede ejecutar:</strong> dejaría con una secuencia imposible a estos equipos, porque hay movimientos posteriores que dependen de los que se borrarían: {{ c['problemas'][:15]|join(', ') }}. Reinicia primero los días posteriores, o filtra por otro usuario.</div>
+{% elif total > 0 %}
+<div class="tarjeta">
+  <h2>Movimientos de ejemplo</h2>
+  <table>
+    <thead><tr><th>Hora</th><th>Tipo</th><th>Equipo</th><th>Ruta</th><th>Usuario</th></tr></thead>
+    <tbody>{% for m in c['movimientos'][:15] %}<tr><td>{{ m['timestamp'] }}</td><td>{{ m['tipo'] }}</td><td>{{ m['equipo'] }}</td><td>{{ m['ruta'] }}</td><td>{{ m['usuario'] }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if total > 15 %}<p class="ayuda" style="margin:0.75rem 0 0;">... y {{ total - 15 }} más.</p>{% endif %}
+</div>
+
+<div class="tarjeta" style="border-color:var(--red);">
+  <h2 style="color:#f87171;">Confirmar</h2>
+  <p class="ayuda">Antes de borrar se guarda un respaldo completo de la base y el detalle de lo borrado queda en el historial de reinicios.</p>
+  <form method="post" action="{{ url_for('reinicio_dia.ejecutar') }}" onsubmit="return confirm('Esto borra {{ total }} movimientos. ¿Seguro?');">
+    <input type="hidden" name="dia" value="{{ dia }}">
+    <input type="hidden" name="usuario_id" value="{{ usuario_id or '' }}">
+    <label for="confirmacion">Escribe REINICIAR para confirmar</label>
+    <input type="text" id="confirmacion" name="confirmacion" autocomplete="off" style="max-width:220px;">
+    <button type="submit" class="peligro">Reiniciar el día</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
