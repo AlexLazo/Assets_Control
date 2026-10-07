@@ -2,15 +2,22 @@
 lista para imprimir en una impresora normal sobre papel adhesivo/laminado
 comprado aparte (no hay impresora térmica de etiquetas).
 
+Hay dos formatos, porque los equipos se etiquetan en superficies distintas:
+  - Teléfonos: etiqueta chica en grilla de 3 x 8 por hoja.
+  - Impresoras: etiqueta de 9.5 cm (ancho) x 4.5 cm (alto), 2 x 5 por hoja
+    tamaño carta. Cada recuadro punteado mide exactamente esas medidas y los
+    recuadros comparten borde, así que se corta por las líneas sin desperdicio.
+Si el PDF trae de los dos tipos, primero van las hojas de teléfonos y luego
+las de impresoras (no se mezclan en una misma hoja porque miden distinto).
+
 Se lee de la base de datos, no de los Excel: desde que se corrió
 importar_catalogo.py, la base es la fuente de verdad de los id_interno.
 
 El QR codifica solo el texto plano del id_interno (ej. "IMP-047"), nunca
 una URL -- así, si el día de mañana el servidor cambia de PC o de IP, no
-hace falta reimprimir y repegar todas las etiquetas físicas. Debajo del
-QR se imprime el mismo ID en texto grande, como respaldo por si el lector
-falla o el QR se ensucia (las pantallas de escaneo aceptan tecleo igual
-que lectura).
+hace falta reimprimir y repegar todas las etiquetas físicas. Junto al QR se
+imprime el ID y el serial (impresoras) o ruta y teléfono (teléfonos), como
+respaldo por si el lector falla o el QR se ensucia.
 
 Uso:
     python scripts/generar_etiquetas.py
@@ -23,9 +30,9 @@ import sqlite3
 import qrcode
 from qrcode.constants import ERROR_CORRECT_M
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import inch
-from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.lib.units import cm, inch
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 import comun
@@ -40,15 +47,17 @@ EQUIPOS_SQL = """SELECT e.id_interno, e.tipo, e.serial_fabrica, e.numero_telefon
                  FROM equipos e LEFT JOIN rutas r ON r.id = e.ruta_asignada_id"""
 SALIDA = comun.BASE_DIR / "etiquetas_qr.pdf"
 
-# Grilla ajustable -- el papel es adhesivo genérico, no una hoja pre-cortada
-# de marca conocida, así que estos valores se pueden retocar según lo que
-# realmente se compre.
-COLUMNAS = 3
-FILAS = 8
 MARGEN = 0.4 * inch
-QR_TAMANO_PREFERIDO = 1.15 * inch
-ALTO_TEXTO = 16       # banda reservada abajo de cada celda para el ID en texto
-ESPACIO_SUPERIOR = 6  # aire entre el QR y el borde superior de la celda
+
+# --- Teléfonos (grilla ajustable; el papel es adhesivo genérico)
+TEL_COLUMNAS = 3
+TEL_FILAS = 8
+TEL_QR_PREFERIDO = 1.15 * inch
+
+# --- Impresoras: medida de la etiqueta final. Para cambiarla, solo estas dos.
+IMP_ANCHO = 9.5 * cm
+IMP_ALTO = 4.5 * cm
+IMP_PADDING = 9  # aire entre el QR / texto y el borde de la etiqueta (puntos)
 
 
 def obtener_equipos() -> list[sqlite3.Row]:
@@ -73,20 +82,6 @@ def generar_qr(texto: str) -> ImageReader:
     return ImageReader(buffer)
 
 
-def _lineas_equipo(equipo) -> list[tuple[str, str, float]]:
-    """Texto que acompaña al QR. Impresora: ID + número de serie. Teléfono:
-    ID + ruta + número de línea. (La ruta puede cambiar con el tiempo; el QR
-    no depende de ella.)"""
-    lineas = [(equipo["id_interno"], "Helvetica-Bold", 13)]
-    if equipo["tipo"] == "impresora":
-        serial = equipo["serial_fabrica"]
-        lineas.append((f"S/N {serial}" if serial and serial != "N/D" else "S/N sin dato", "Helvetica", 8.5))
-    else:
-        lineas.append((f"Ruta {equipo['ruta']}" if equipo["ruta"] else "Ruta sin asignar", "Helvetica", 9))
-        lineas.append((f"Tel {equipo['numero_telefono']}" if equipo["numero_telefono"] else "Tel sin dato", "Helvetica", 9))
-    return lineas
-
-
 def generar_qr_png_bytes(texto: str) -> bytes:
     """PNG de un solo QR, para reimprimir una sola etiqueta perdida sin
     tener que generar el PDF completo de nuevo."""
@@ -99,6 +94,126 @@ def generar_qr_png_bytes(texto: str) -> bytes:
     return buffer.getvalue()
 
 
+def _lineas_telefono(equipo) -> list[tuple[str, str, float]]:
+    return [
+        (equipo["id_interno"], "Helvetica-Bold", 13),
+        (f"Ruta {equipo['ruta']}" if equipo["ruta"] else "Ruta sin asignar", "Helvetica", 9),
+        (f"Tel {equipo['numero_telefono']}" if equipo["numero_telefono"] else "Tel sin dato", "Helvetica", 9),
+    ]
+
+
+def _ajustar(texto: str, fuente: str, tamano: float, ancho_max: float) -> float:
+    """Reduce el tamaño de letra hasta que el texto quepa en `ancho_max`."""
+    while tamano > 6 and stringWidth(texto, fuente, tamano) > ancho_max:
+        tamano -= 0.5
+    return tamano
+
+
+def _hoja_telefonos(c: canvas.Canvas, equipos: list) -> None:
+    ancho_pagina, alto_pagina = letter
+    ancho_celda = (ancho_pagina - 2 * MARGEN) / TEL_COLUMNAS
+    alto_celda = (alto_pagina - 2 * MARGEN) / TEL_FILAS
+    por_pagina = TEL_COLUMNAS * TEL_FILAS
+    qr_tamano = min(TEL_QR_PREFERIDO, alto_celda - 14, ancho_celda * 0.5)
+
+    for indice, equipo in enumerate(equipos):
+        pos = indice % por_pagina
+        if indice > 0 and pos == 0:
+            c.showPage()
+
+        x0 = MARGEN + (pos % TEL_COLUMNAS) * ancho_celda
+        y0 = alto_pagina - MARGEN - (pos // TEL_COLUMNAS + 1) * alto_celda
+
+        # Guía de corte: ayuda a cortar derecho en papel sin líneas pre-impresas.
+        c.setDash(2, 2)
+        c.setLineWidth(0.4)
+        c.rect(x0 + 2, y0 + 2, ancho_celda - 4, alto_celda - 4)
+        c.setDash()
+
+        qr_x = x0 + 8
+        c.drawImage(generar_qr(equipo["id_interno"]), qr_x, y0 + (alto_celda - qr_tamano) / 2, width=qr_tamano, height=qr_tamano)
+
+        tx = qr_x + qr_tamano + 8
+        ancho_texto = x0 + ancho_celda - tx - 6
+        lineas = _lineas_telefono(equipo)
+        y = y0 + alto_celda / 2 + (len(lineas) * 13) / 2 - 6
+        for texto, fuente, tamano in lineas:
+            tamano = _ajustar(texto, fuente, tamano, ancho_texto)
+            c.setFont(fuente, tamano)
+            c.drawString(tx, y, texto)
+            y -= tamano + 3.5
+
+
+def formato_impresoras() -> tuple[int, int]:
+    """(columnas, filas) de etiquetas de impresora que caben en una hoja carta."""
+    ancho_pagina, alto_pagina = letter
+    return int((ancho_pagina - 2 * MARGEN) // IMP_ANCHO), int((alto_pagina - 2 * MARGEN) // IMP_ALTO)
+
+
+def _hoja_impresoras(c: canvas.Canvas, equipos: list) -> None:
+    ancho_pagina, alto_pagina = letter
+    columnas, filas = formato_impresoras()
+    por_pagina = columnas * filas
+    # La grilla queda centrada en la hoja; las etiquetas se tocan entre sí.
+    izq = (ancho_pagina - columnas * IMP_ANCHO) / 2
+    sup = (alto_pagina - filas * IMP_ALTO) / 2
+    qr_tamano = IMP_ALTO - 2 * IMP_PADDING
+
+    for indice, equipo in enumerate(equipos):
+        pos = indice % por_pagina
+        if indice > 0 and pos == 0:
+            c.showPage()
+
+        x0 = izq + (pos % columnas) * IMP_ANCHO
+        y0 = alto_pagina - sup - (pos // columnas + 1) * IMP_ALTO
+
+        # Guía de corte: el recuadro mide exactamente IMP_ANCHO x IMP_ALTO.
+        c.setDash(2, 2)
+        c.setLineWidth(0.4)
+        c.rect(x0, y0, IMP_ANCHO, IMP_ALTO)
+        c.setDash()
+
+        qr_x = x0 + IMP_PADDING + 3
+        c.drawImage(generar_qr(equipo["id_interno"]), qr_x, y0 + IMP_PADDING, width=qr_tamano, height=qr_tamano)
+
+        tx = qr_x + qr_tamano + 12
+        ancho_texto = x0 + IMP_ANCHO - tx - IMP_PADDING
+        serial = equipo["serial_fabrica"]
+        tiene_serial = bool(serial) and serial != "N/D"
+
+        # (texto, fuente, tamaño, línea base respecto al centro vertical, gris)
+        # Posiciones fijas: así el ID, la leyenda y el serial nunca se encimen.
+        centro = y0 + IMP_ALTO / 2
+        bloque = [
+            (equipo["id_interno"], "Helvetica-Bold", 30, 10, 0),
+            ("NÚMERO DE SERIE", "Helvetica", 7.5, -14, 0.45),
+            (
+                serial if tiene_serial else "Sin serial legible",
+                "Helvetica-Bold" if tiene_serial else "Helvetica",
+                15 if tiene_serial else 11,
+                -31,
+                0,
+            ),
+        ]
+        for texto, fuente, tamano, base, gris in bloque:
+            tamano = _ajustar(texto, fuente, tamano, ancho_texto)
+            c.setFont(fuente, tamano)
+            c.setFillGray(gris)
+            c.drawString(tx, centro + base, texto)
+        c.setFillGray(0)
+
+
+def paginas_necesarias(equipos: list) -> dict[str, int]:
+    """Cuántas hojas ocupa cada tipo, para informar al usuario."""
+    col, fil = formato_impresoras()
+    tel = sum(1 for e in equipos if e["tipo"] != "impresora")
+    imp = len(equipos) - tel
+    return {
+        "telefono": -(-tel // (TEL_COLUMNAS * TEL_FILAS)),
+        "impresora": -(-imp // (col * fil)),
+    }
+
+
 def generar_pdf(equipos: list[sqlite3.Row], destino=None) -> None:
     """`destino` puede ser una ruta de archivo o un objeto tipo-archivo
     (ej. io.BytesIO) -- reportlab acepta ambos, así la misma función sirve
@@ -107,52 +222,16 @@ def generar_pdf(equipos: list[sqlite3.Row], destino=None) -> None:
     if destino is None:
         destino = str(SALIDA)
 
-    ancho_pagina, alto_pagina = letter
-    ancho_celda = (ancho_pagina - 2 * MARGEN) / COLUMNAS
-    alto_celda = (alto_pagina - 2 * MARGEN) / FILAS
-    por_pagina = COLUMNAS * FILAS
-
-    # El QR nunca puede ser más grande que el espacio que realmente le
-    # queda libre en la celda (ancho completo, alto menos la banda de
-    # texto) -- si se calcula mal, el QR y el ID de texto se encimarían.
-    qr_tamano = min(QR_TAMANO_PREFERIDO, alto_celda - 14, ancho_celda * 0.5)
+    telefonos = [e for e in equipos if e["tipo"] != "impresora"]
+    impresoras = [e for e in equipos if e["tipo"] == "impresora"]
 
     c = canvas.Canvas(destino, pagesize=letter)
-
-    for indice, equipo in enumerate(equipos):
-        pos_en_pagina = indice % por_pagina
-        if indice > 0 and pos_en_pagina == 0:
-            c.showPage()
-
-        fila = pos_en_pagina // COLUMNAS
-        columna = pos_en_pagina % COLUMNAS
-
-        x0 = MARGEN + columna * ancho_celda
-        y0 = alto_pagina - MARGEN - (fila + 1) * alto_celda
-
-        # Guía de corte -- ayuda a cortar derecho en papel genérico sin
-        # líneas pre-impresas.
-        c.setDash(2, 2)
-        c.setLineWidth(0.4)
-        c.rect(x0 + 2, y0 + 2, ancho_celda - 4, alto_celda - 4)
-        c.setDash()
-
-        # QR a la izquierda (ocupa todo el alto útil) y los datos a la derecha.
-        qr_x = x0 + 8
-        qr_y = y0 + (alto_celda - qr_tamano) / 2
-        c.drawImage(generar_qr(equipo["id_interno"]), qr_x, qr_y, width=qr_tamano, height=qr_tamano)
-
-        tx = qr_x + qr_tamano + 8
-        ancho_texto = x0 + ancho_celda - tx - 6
-        lineas = _lineas_equipo(equipo)
-        y = y0 + alto_celda / 2 + (len(lineas) * 13) / 2 - 6
-        for texto, fuente, tamano in lineas:
-            while tamano > 6 and stringWidth(texto, fuente, tamano) > ancho_texto:
-                tamano -= 0.5
-            c.setFont(fuente, tamano)
-            c.drawString(tx, y, texto)
-            y -= tamano + 3.5
-
+    if telefonos:
+        _hoja_telefonos(c, telefonos)
+    if telefonos and impresoras:
+        c.showPage()
+    if impresoras:
+        _hoja_impresoras(c, impresoras)
     c.save()
 
 
@@ -162,8 +241,8 @@ def main() -> None:
         print("No hay equipos en la base de datos. Corre primero scripts/importar_catalogo.py")
         return
     generar_pdf(equipos)
-    paginas = -(-len(equipos) // (COLUMNAS * FILAS))
-    print(f"Generadas {len(equipos)} etiquetas en {paginas} página(s): {SALIDA}")
+    p = paginas_necesarias(equipos)
+    print(f"Generadas {len(equipos)} etiquetas: {p['telefono']} hoja(s) de teléfonos y {p['impresora']} de impresoras -> {SALIDA}")
 
 
 if __name__ == "__main__":
