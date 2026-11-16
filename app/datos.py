@@ -11,6 +11,7 @@ import comun
 import importar_catalogo
 
 from . import migraciones, respaldos
+from . import auditoria
 from .auth import requiere_permiso
 from .db import get_db
 
@@ -98,6 +99,9 @@ def subir():
         shutil.copy2(destino, respaldo)
 
     archivo.save(destino)
+    db = get_db()
+    auditoria.registrar(db, "datos_subir_excel", destino.name, archivo.filename)
+    db.commit()
     flash(f"'{destino.name}' actualizado. Revisa el resumen abajo y usa 'Actualizar catálogo' cuando quieras aplicarlo a la base.")
     return redirect(url_for("datos.ver"))
 
@@ -107,6 +111,11 @@ def subir():
 def actualizar_catalogo():
     db = get_db()
     resultado = importar_catalogo.actualizar_o_agregar(db, current_user.id)
+    auditoria.registrar(
+        db, "datos_catalogo", None,
+        f"{resultado['telefonos_nuevos']} teléfono(s) nuevo(s), {resultado['impresoras_nuevas']} impresora(s) nueva(s), "
+        f"{resultado['impresoras_actualizadas']} impresora(s) actualizadas",
+    )
     db.commit()
     flash(
         f"Catálogo actualizado: {resultado['telefonos_nuevos']} teléfono(s) nuevo(s), "
@@ -124,6 +133,9 @@ def actualizar_catalogo():
 def respaldo_ahora():
     """Genera un respaldo consistente de la base y lo descarga."""
     destino = respaldos.hacer_respaldo(current_app, "manual")
+    db = get_db()
+    auditoria.registrar(db, "datos_respaldo", destino.name)
+    db.commit()
     return send_file(destino, as_attachment=True, download_name=f"activos_{datetime.now():%Y%m%d_%H%M%S}.db")
 
 
@@ -169,9 +181,18 @@ def restaurar():
 
         get_db().commit()
         previo = respaldos.hacer_respaldo(current_app, "antes_de_restaurar")
+        actor = current_user.nombre
         respaldos.copiar(temporal, current_app.config["DATABASE"])
 
     version = migraciones.actualizar(current_app.config["DATABASE"])
+    # La base ya es otra: se anota con una conexión nueva y sin id de usuario
+    # (el id de quien restauró podría no existir -- o ser otra persona -- en la base restaurada).
+    nueva = sqlite3.connect(current_app.config["DATABASE"])
+    try:
+        auditoria.registrar(nueva, "datos_restaurar", archivo.filename, f"Respaldo previo: {previo.name}", usuario_nombre=actor)
+        nueva.commit()
+    finally:
+        nueva.close()
     flash(
         f"Base restaurada (esquema v{version}). Se guardó un respaldo de lo que había antes: {previo.name}. "
         "Tu sesión puede dejar de ser válida si los usuarios cambiaron: vuelve a iniciar sesión.",
@@ -195,6 +216,7 @@ def reiniciar():
 
     for tabla in ("conteo_items", "conteos", "mantenimientos", "incidencias", "movimientos", "equipos", "rutas"):
         db.execute(f"DELETE FROM {tabla}")
+    auditoria.registrar(db, "datos_reiniciar_bd", None, f"Respaldo previo: {respaldo.name}")
     db.commit()
 
     flash(

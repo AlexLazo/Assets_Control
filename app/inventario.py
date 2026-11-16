@@ -3,6 +3,7 @@ import sqlite3
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from . import auditoria
 from .auth import requiere_permiso
 from .db import get_db
 
@@ -87,6 +88,7 @@ def nuevo():
                 request.form.get("ruta_asignada_id", type=int) or None,
             ),
         )
+        auditoria.registrar(db, "equipo_crear", id_interno, f"Tipo: {tipo}")
         db.commit()
         flash(f"Equipo {id_interno} creado. No olvides imprimirle su etiqueta QR en Admin → Etiquetas.")
         return redirect(url_for("inventario.editar", id_interno=id_interno))
@@ -133,21 +135,31 @@ def editar(id_interno):
                 (current_user.id, equipo["id"]),
             )
 
+        nuevos = {
+            "modelo": request.form.get("modelo") or None,
+            "fabricante": request.form.get("fabricante") or None,
+            "serial_fabrica": request.form.get("serial_fabrica") or None,
+            "numero_telefono": request.form.get("numero_telefono") or None,
+            "estado": nuevo_estado,
+            "notas": request.form.get("notas") or None,
+            "requiere_revision": 1 if request.form.get("requiere_revision") else 0,
+            "ruta_asignada_id": request.form.get("ruta_asignada_id", type=int) or None,
+        }
         db.execute(
             """UPDATE equipos SET modelo = ?, fabricante = ?, serial_fabrica = ?, numero_telefono = ?,
                    estado = ?, notas = ?, requiere_revision = ?, ruta_asignada_id = ? WHERE id = ?""",
-            (
-                request.form.get("modelo") or None,
-                request.form.get("fabricante") or None,
-                request.form.get("serial_fabrica") or None,
-                request.form.get("numero_telefono") or None,
-                nuevo_estado,
-                request.form.get("notas") or None,
-                1 if request.form.get("requiere_revision") else 0,
-                request.form.get("ruta_asignada_id", type=int) or None,
-                equipo["id"],
-            ),
+            (*nuevos.values(), equipo["id"]),
         )
+        # La ruta se guarda como id; para la auditoría se muestra su código.
+        codigos = {r["id"]: r["codigo"] for r in db.execute("SELECT id, codigo FROM rutas")}
+        antes = dict(equipo, ruta_asignada_id=codigos.get(equipo["ruta_asignada_id"]))
+        despues = dict(nuevos, ruta_asignada_id=codigos.get(nuevos["ruta_asignada_id"]))
+        cambio = auditoria.cambios(antes, despues, {
+            "modelo": "Modelo", "fabricante": "Fabricante", "serial_fabrica": "Serial", "numero_telefono": "Teléfono",
+            "estado": "Estado", "notas": "Notas", "requiere_revision": "Requiere revisión", "ruta_asignada_id": "Ruta asignada",
+        })
+        if cambio:
+            auditoria.registrar(db, "equipo_editar", id_interno, cambio)
         db.commit()
         flash(f"{id_interno} actualizado.")
         return redirect(url_for("inventario.listado"))
@@ -166,6 +178,7 @@ def eliminar(id_interno):
         return redirect(url_for("inventario.listado"))
     try:
         db.execute("DELETE FROM equipos WHERE id = ?", (equipo["id"],))
+        auditoria.registrar(db, "equipo_eliminar", id_interno)
         db.commit()
         flash(f"{id_interno} eliminado.")
     except sqlite3.IntegrityError:
@@ -182,6 +195,9 @@ def rutas():
         ruta_id = request.form.get("ruta_id", type=int)
         nueva_activa = request.form.get("nueva_activa", type=int)
         db.execute("UPDATE rutas SET activa = ? WHERE id = ?", (nueva_activa, ruta_id))
+        ruta = db.execute("SELECT codigo FROM rutas WHERE id = ?", (ruta_id,)).fetchone()
+        if ruta:
+            auditoria.registrar(db, "ruta_estado", ruta["codigo"], "Activada" if nueva_activa else "Desactivada")
         db.commit()
         return redirect(url_for("inventario.rutas"))
 
@@ -209,6 +225,7 @@ def nueva_ruta():
             flash(f"Ya existe la ruta {codigo}.", "error")
             return redirect(url_for("inventario.nueva_ruta"))
         db.execute("INSERT INTO rutas (codigo, supervisor) VALUES (?, ?)", (codigo, supervisor))
+        auditoria.registrar(db, "ruta_crear", codigo, f"Supervisor: {supervisor or '(ninguno)'}")
         db.commit()
         flash(f"Ruta {codigo} creada.")
         return redirect(url_for("inventario.rutas"))
@@ -236,6 +253,9 @@ def editar_ruta(ruta_id):
             flash(f"Ya existe otra ruta con el código {codigo}.", "error")
             return render_template("inventario/editar_ruta.html", ruta=ruta)
         db.execute("UPDATE rutas SET codigo = ?, supervisor = ? WHERE id = ?", (codigo, supervisor, ruta_id))
+        cambio = auditoria.cambios(ruta, {"codigo": codigo, "supervisor": supervisor}, {"codigo": "Código", "supervisor": "Supervisor"})
+        if cambio:
+            auditoria.registrar(db, "ruta_editar", codigo, cambio)
         db.commit()
         flash("Ruta actualizada.")
         return redirect(url_for("inventario.rutas"))
@@ -253,6 +273,7 @@ def eliminar_ruta(ruta_id):
         return redirect(url_for("inventario.rutas"))
     try:
         db.execute("DELETE FROM rutas WHERE id = ?", (ruta_id,))
+        auditoria.registrar(db, "ruta_eliminar", ruta["codigo"])
         db.commit()
         flash(f"Ruta {ruta['codigo']} eliminada.")
     except sqlite3.IntegrityError:

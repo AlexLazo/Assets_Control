@@ -1,8 +1,9 @@
 from datetime import date, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from . import alertas, auditoria
 from .auth import requiere_permiso
 from .db import get_db
 
@@ -63,6 +64,7 @@ def ver():
     ).fetchall()
 
     etiquetas, salidas, retornos = _historial_movimientos(db)
+    alertas_activas = alertas.calcular(db)
 
     return render_template(
         "dashboard/ver.html",
@@ -75,6 +77,7 @@ def ver():
         etiquetas=etiquetas,
         salidas=salidas,
         retornos=retornos,
+        alertas=alertas_activas,
     )
 
 
@@ -102,9 +105,43 @@ def cerrar_dia():
         )
         nuevas += cur.rowcount
 
+    auditoria.registrar(db, "dia_cerrar", hoy, f"{nuevas} incidencia(s) nueva(s); {len(pendientes)} equipo(s) seguían en ruta")
     db.commit()
     if nuevas:
         flash(f"Cierre de día registrado: {nuevas} equipo(s) marcados como incidencia (no retornaron).", "error")
     else:
         flash("Cierre de día registrado: no hay equipos pendientes de retorno. Sin incidencias nuevas.")
+    return redirect(url_for("dashboard.ver"))
+
+
+@bp.route("/incidencias/<int:incidencia_id>/resolver", methods=["POST"])
+@requiere_permiso("cerrar_dia")
+def resolver_incidencia(incidencia_id):
+    """Cierra a mano una incidencia (equipo extraviado, ya dado de baja, error
+    de registro...). La nota es obligatoria y queda en la auditoría."""
+    nota = request.form.get("nota", "").strip()
+    if len(nota) < 5:
+        flash("Escribe una nota que explique por qué se resuelve (mínimo 5 caracteres).", "error")
+        return redirect(url_for("dashboard.ver"))
+
+    db = get_db()
+    inc = db.execute(
+        """SELECT i.id, i.fecha, e.id_interno, r.codigo AS ruta
+           FROM incidencias i JOIN equipos e ON e.id = i.equipo_id JOIN rutas r ON r.id = i.ruta_id
+           WHERE i.id = ? AND i.estado = 'abierta'""",
+        (incidencia_id,),
+    ).fetchone()
+    if inc is None:
+        flash("Esa incidencia no existe o ya estaba resuelta.", "error")
+        return redirect(url_for("dashboard.ver"))
+
+    db.execute(
+        """UPDATE incidencias SET estado = 'resuelta', resolucion_nota = ?,
+                  resuelta_por_id = ?, fecha_resolucion = datetime('now','localtime')
+           WHERE id = ?""",
+        (f"Resuelta a mano: {nota}", current_user.id, incidencia_id),
+    )
+    auditoria.registrar(db, "incidencia_resolver", inc["id_interno"], f"Ruta {inc['ruta']}, cierre del {inc['fecha']}. Nota: {nota}")
+    db.commit()
+    flash(f"Incidencia de {inc['id_interno']} resuelta.")
     return redirect(url_for("dashboard.ver"))

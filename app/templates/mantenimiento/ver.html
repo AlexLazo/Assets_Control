@@ -15,6 +15,8 @@
 
 <div class="tarjeta">
   <h2>En reparación ahora ({{ en_reparacion|length }})</h2>
+  {% set atrasados = en_reparacion|selectattr('dias', 'ge', dias_alerta)|list|length %}
+  {% if atrasados %}<div class="flash error">{{ atrasados }} equipo(s) llevan {{ dias_alerta }} días o más en reparación. Da seguimiento o márcalos como dados de baja.</div>{% endif %}
   {% if en_reparacion %}
   <table>
     <thead><tr><th>Equipo</th><th>Tipo</th><th>Desde</th><th>Días</th><th>Motivo</th><th colspan="2"></th></tr></thead>
@@ -24,7 +26,7 @@
         <td>{{ m['id_interno'] }}</td>
         <td>{{ 'Teléfono' if m['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ m['fecha_envio'] }}</td>
-        <td><span class="badge {{ 'revision' if m['dias'] >= 7 else 'en_ruta' }}">{{ m['dias'] }} día{{ 's' if m['dias'] != 1 }}</span></td>
+        <td><span class="badge {{ 'revision' if m['dias'] >= dias_alerta else 'en_ruta' }}">{{ m['dias'] }} día{{ 's' if m['dias'] != 1 }}{% if m['dias'] >= dias_alerta %} · atrasado{% endif %}</span></td>
         <td>{{ m['motivo'] or '-' }}</td>
         <td colspan="2">
           <form method="post" action="{{ url_for('mantenimiento.regreso', mantenimiento_id=m['id']) }}" class="en-linea">

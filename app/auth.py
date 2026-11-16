@@ -1,3 +1,4 @@
+import re
 import time
 from functools import wraps
 
@@ -5,9 +6,22 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import UserMixin, current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from . import auditoria
 from .db import get_db
 
 bp = Blueprint("auth", __name__)
+
+# Reglas únicas de contraseña y de usuario de login: las usan Mi cuenta,
+# Usuarios (crear/resetear) y el script de línea de comandos.
+MIN_PASSWORD = 8
+USUARIO_RE = re.compile(r"^[A-Za-z0-9._-]{3,30}$")
+USUARIO_AYUDA = "3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo (sin espacios)."
+
+
+def error_password(password: str) -> str | None:
+    if len(password) < MIN_PASSWORD:
+        return f"La contraseña debe tener al menos {MIN_PASSWORD} caracteres."
+    return None
 
 ROLES = {
     "supervisor": "Supervisor",
@@ -42,10 +56,12 @@ PERMISOS = {
 
 
 class Usuario(UserMixin):
-    def __init__(self, id_: int, nombre: str, rol: str):
+    def __init__(self, id_: int, nombre: str, rol: str, usuario: str | None = None, debe_cambiar: bool = False):
         self.id = id_
-        self.nombre = nombre
+        self.nombre = nombre      # nombre para mostrar (bitácora, reportes)
         self.rol = rol
+        self.usuario = usuario    # nombre corto de login
+        self.debe_cambiar = debe_cambiar
 
     def get_id(self) -> str:
         return str(self.id)
@@ -53,9 +69,11 @@ class Usuario(UserMixin):
 
 def cargar_usuario(usuario_id: str):
     fila = get_db().execute(
-        "SELECT id, nombre, rol FROM usuarios WHERE id = ? AND activo = 1", (usuario_id,)
+        "SELECT id, nombre, rol, usuario, debe_cambiar_password FROM usuarios WHERE id = ? AND activo = 1", (usuario_id,)
     ).fetchone()
-    return Usuario(fila["id"], fila["nombre"], fila["rol"]) if fila else None
+    if not fila:
+        return None
+    return Usuario(fila["id"], fila["nombre"], fila["rol"], fila["usuario"], bool(fila["debe_cambiar_password"]))
 
 
 def puede(permiso: str) -> bool:
@@ -134,6 +152,30 @@ def _destino_seguro(destino: str | None) -> str:
     return url_for("escaneo.salida")
 
 
+def _buscar_para_login(db, texto: str):
+    """Acepta el usuario corto (AlexLz) sin importar mayúsculas. Por
+    compatibilidad también acepta el nombre completo con el que la gente ya
+    entraba; el usuario corto siempre tiene prioridad."""
+    if not texto:
+        return None
+    columnas = "id, nombre, usuario, rol, activo, password_hash, debe_cambiar_password"
+    fila = db.execute(f"SELECT {columnas} FROM usuarios WHERE usuario = ? COLLATE NOCASE", (texto,)).fetchone()
+    if fila is None:
+        fila = db.execute(f"SELECT {columnas} FROM usuarios WHERE nombre = ? COLLATE NOCASE ORDER BY id LIMIT 1", (texto,)).fetchone()
+    return fila
+
+
+@bp.before_app_request
+def forzar_cambio_de_password():
+    """Quien tiene una contraseña temporal (cuenta nueva o reseteada por un
+    Admin) solo puede ir a 'Mi cuenta' o salir, hasta que elija la suya."""
+    if request.endpoint in (None, "static", "auth.cuenta", "auth.logout", "auth.login", "service_worker", "manifiesto", "salud"):
+        return None
+    if current_user.is_authenticated and getattr(current_user, "debe_cambiar", False):
+        return redirect(url_for("auth.cuenta"))
+    return None
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -145,12 +187,19 @@ def login():
             flash(f"Demasiados intentos fallidos. Espera {-(-espera // 60)} minuto(s) e inténtalo de nuevo.", "error")
             return redirect(url_for("auth.login"))
 
-        fila = get_db().execute(
-            "SELECT id, nombre, rol, activo, password_hash FROM usuarios WHERE nombre = ?", (nombre,)
-        ).fetchone()
+        db = get_db()
+        fila = _buscar_para_login(db, nombre)
 
         if fila is None or not check_password_hash(fila["password_hash"], password):
             _registrar_fallo(nombre)
+            if fila is not None:
+                # Solo se anota el intento cuando el usuario existe: así nunca
+                # se guarda lo que alguien escribió por error en ese campo.
+                auditoria.registrar(
+                    db, "login_fallido", fila["usuario"] or fila["nombre"], "Contraseña incorrecta",
+                    usuario_id=fila["id"], usuario_nombre=fila["nombre"],
+                )
+                db.commit()
             flash("Usuario o contraseña incorrectos.", "error")
             return redirect(url_for("auth.login"))
 
@@ -159,7 +208,15 @@ def login():
             return redirect(url_for("auth.login"))
 
         _limpiar_fallos(nombre)
-        login_user(Usuario(fila["id"], fila["nombre"], fila["rol"]), remember=True)
+        login_user(
+            Usuario(fila["id"], fila["nombre"], fila["rol"], fila["usuario"], bool(fila["debe_cambiar_password"])),
+            remember=True,
+        )
+        auditoria.registrar(db, "login", fila["usuario"] or fila["nombre"], usuario_id=fila["id"], usuario_nombre=fila["nombre"])
+        db.commit()
+        if fila["debe_cambiar_password"]:
+            flash("Por seguridad, elige tu propia contraseña antes de continuar.")
+            return redirect(url_for("auth.cuenta"))
         flash(f"Sesión iniciada como {fila['nombre']}.")
         return redirect(_destino_seguro(request.args.get("next")))
 
@@ -187,15 +244,19 @@ def cuenta():
 
         if not check_password_hash(fila["password_hash"], actual):
             flash("La contraseña actual no es correcta.", "error")
-        elif len(nueva) < 8:
-            flash("La contraseña nueva debe tener al menos 8 caracteres.", "error")
+        elif error_password(nueva):
+            flash(error_password(nueva), "error")
         elif nueva != confirmar:
             flash("La contraseña nueva y su confirmación no coinciden.", "error")
         elif nueva == actual:
             flash("La contraseña nueva debe ser distinta de la actual.", "error")
         else:
-            db.execute("UPDATE usuarios SET password_hash = ? WHERE id = ?", (generate_password_hash(nueva), current_user.id))
+            db.execute(
+                "UPDATE usuarios SET password_hash = ?, debe_cambiar_password = 0 WHERE id = ?",
+                (generate_password_hash(nueva), current_user.id),
+            )
+            auditoria.registrar(db, "password_propia", current_user.usuario or current_user.nombre)
             db.commit()
             flash("Contraseña actualizada.")
-            return redirect(url_for("auth.cuenta"))
+            return redirect(url_for("escaneo.salida") if current_user.debe_cambiar else url_for("auth.cuenta"))
     return render_template("auth/cuenta.html")

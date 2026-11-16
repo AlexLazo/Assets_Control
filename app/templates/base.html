@@ -158,6 +158,7 @@
   .stat.rojo { background: linear-gradient(135deg, #b91c1c, #ef4444); }
   .stat.morado { background: linear-gradient(135deg, #6d28d9, #8b5cf6); }
 
+  .nav-globo { margin-left: auto; background: var(--red); color: white; border-radius: 999px; font-size: 0.72rem; font-weight: 700; padding: 0.05rem 0.5rem; }
   .grid-botones { display: flex; flex-wrap: wrap; gap: 0.6rem; }
   .grid-botones button { min-width: 140px; }
   form.en-linea { display: flex; gap: 0.5rem; align-items: center; }
@@ -170,6 +171,7 @@
     .sidebar nav { flex-direction: row; flex: none; }
     .sidebar nav .separador { display: none; }
     .sidebar nav a span { display: none; }
+    .sidebar nav a span.nav-globo { display: inline-block; margin-left: 0.3rem; }
     .sidebar .usuario-box { border-top: none; margin-top: 0; padding-top: 0; margin-left: auto; }
     .sidebar .usuario-box .datos { display: none; }
     main { padding: 1.25rem 1rem 3rem; }
@@ -208,7 +210,7 @@
       <a href="{{ url_for('mantenimiento.ver') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('mantenimiento.') }}">{{ icono('mantenimiento') }}<span>Mantenimiento</span></a>
       <div class="separador"></div>
       <a href="{{ url_for('pendientes.ver') }}" class="{{ 'activo' if request.endpoint == 'pendientes.ver' }}">{{ icono('pendientes') }}<span>Pendientes</span></a>
-      <a href="{{ url_for('dashboard.ver') }}" class="{{ 'activo' if request.endpoint == 'dashboard.ver' }}">{{ icono('dashboard') }}<span>Dashboard</span></a>
+      <a href="{{ url_for('dashboard.ver') }}" class="{{ 'activo' if request.endpoint == 'dashboard.ver' }}">{{ icono('dashboard') }}<span>Dashboard</span>{% if alertas_total %}<span class="nav-globo" title="Alertas pendientes">{{ alertas_total }}</span>{% endif %}</a>
       <a href="{{ url_for('inventario.listado') }}" class="{{ 'activo' if request.endpoint and request.endpoint.startswith('inventario.') }}">{{ icono('inventario') }}<span>Inventario</span></a>
       {% if puede('bitacora') %}
       <a href="{{ url_for('bitacora.ver') }}" class="{{ 'activo' if request.endpoint == 'bitacora.ver' }}">{{ icono('bitacora') }}<span>Bitácora</span></a>

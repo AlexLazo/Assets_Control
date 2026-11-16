@@ -9,11 +9,14 @@ CREATE TABLE rutas (
 
 CREATE TABLE usuarios (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre         TEXT NOT NULL UNIQUE,
+    nombre         TEXT NOT NULL UNIQUE,   -- nombre para mostrar (bitácora, reportes)
     password_hash  TEXT NOT NULL,
     rol            TEXT NOT NULL DEFAULT 'supervisor' CHECK (rol IN ('supervisor','facturador','admin','super_admin')),
-    activo         BOOLEAN NOT NULL DEFAULT 1
+    activo         BOOLEAN NOT NULL DEFAULT 1,
+    usuario        TEXT,                   -- nombre corto para iniciar sesión (AlexLz)
+    debe_cambiar_password BOOLEAN NOT NULL DEFAULT 0
 );
+CREATE UNIQUE INDEX idx_usuarios_usuario ON usuarios(usuario COLLATE NOCASE);
 
 CREATE TABLE equipos (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +56,8 @@ CREATE TABLE incidencias (
     operador_cierre_id    INTEGER REFERENCES usuarios(id),
     estado                TEXT NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta','resuelta')),
     resolucion_nota       TEXT,
+    resuelta_por_id       INTEGER REFERENCES usuarios(id),
+    fecha_resolucion      TEXT,
     UNIQUE (equipo_id, fecha)
 );
 
@@ -158,3 +163,18 @@ CREATE TABLE reinicios (
     respaldo              TEXT,
     detalle               TEXT
 );
+
+-- Auditoría: quién hizo qué y cuándo. usuario_id sin llave foránea a propósito
+-- (el nombre queda copiado en usuario_nombre; el registro sobrevive si se borra al usuario).
+CREATE TABLE auditoria (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha           TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    usuario_id      INTEGER,
+    usuario_nombre  TEXT,
+    accion          TEXT NOT NULL,
+    objetivo        TEXT,
+    detalle         TEXT
+);
+CREATE INDEX idx_auditoria_fecha   ON auditoria(fecha);
+CREATE INDEX idx_auditoria_usuario ON auditoria(usuario_id);
+CREATE INDEX idx_auditoria_accion  ON auditoria(accion);

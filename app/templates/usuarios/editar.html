@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Editar usuario{% endblock %}
+{% block contenido %}
+<div class="tarjeta">
+  <h2>Editar usuario</h2>
+  <form method="post" style="max-width:460px;">
+    <label for="usuario">Usuario (para iniciar sesión)</label>
+    <input type="text" id="usuario" name="usuario" value="{{ usuario }}" placeholder="AlexLz" autocomplete="off" autocapitalize="none" spellcheck="false" autofocus>
+    <p class="ayuda" style="margin-top:-0.6rem;">Corto y sin espacios (letras, números, punto, guion). No importan las mayúsculas al entrar.</p>
+
+    <label for="nombre">Nombre completo (se muestra en la bitácora y reportes)</label>
+    <input type="text" id="nombre" name="nombre" value="{{ nombre }}" autocomplete="off">
+
+    <button type="submit">Guardar</button>
+    <a class="boton secundario" href="{{ url_for('usuarios.listado') }}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

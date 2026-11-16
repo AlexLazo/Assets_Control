@@ -13,11 +13,12 @@
 
 <div class="tarjeta">
   <table>
-    <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
     <tbody>
       {% for u in usuarios %}
       <tr>
-        <td>{{ u['nombre'] }}{% if u['id'] == current_user.id %} <span class="badge en_bodega">tú</span>{% endif %}</td>
+        <td><strong>{{ u['usuario'] or '-' }}</strong>{% if u['id'] == current_user.id %} <span class="badge en_bodega">tú</span>{% endif %}{% if u['debe_cambiar_password'] %} <span class="badge en_ruta" title="Aún no cambia su contraseña temporal">clave temporal</span>{% endif %}</td>
+        <td>{{ u['nombre'] }}</td>
         <td>
           {% if u['gestionable'] and u['id'] != current_user.id %}
           <form method="post" action="{{ url_for('usuarios.cambiar_rol', usuario_id=u['id']) }}">
@@ -38,6 +39,7 @@
               <input type="hidden" name="nuevo_activo" value="{{ 0 if u['activo'] else 1 }}">
               <button type="submit" class="secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;">{{ 'Desactivar' if u['activo'] else 'Activar' }}</button>
             </form>
+            <a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('usuarios.editar', usuario_id=u['id']) }}">Editar</a>
             <a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('usuarios.resetear_password', usuario_id=u['id']) }}">Resetear contraseña</a>
             <form method="post" action="{{ url_for('usuarios.eliminar', usuario_id=u['id']) }}" onsubmit="return confirm('¿Eliminar a {{ u['nombre'] }}?');">
               <button type="submit" class="peligro" style="padding:0.3rem 0.6rem; font-size:0.85rem;">Eliminar</button>

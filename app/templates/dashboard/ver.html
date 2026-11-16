@@ -26,6 +26,49 @@
   </div>
 </div>
 
+{% if alertas.total %}
+<div class="tarjeta" style="border-color: var(--red);">
+  <h2>Alertas ({{ alertas.total }})</h2>
+  {% if alertas.fuera %}
+  <h3 style="font-size:1rem; margin:0.4rem 0;">Equipos fuera {{ alertas.dias_fuera }} días o más sin retorno ({{ alertas.fuera|length }})</h3>
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta</th><th>Supervisor</th><th>Salió</th><th>Días fuera</th></tr></thead>
+    <tbody>
+      {% for a in alertas.fuera[:10] %}
+      <tr>
+        <td>{{ a['id_interno'] }}</td>
+        <td>{{ 'Teléfono' if a['tipo'] == 'telefono' else 'Impresora' }}</td>
+        <td>{{ a['ruta'] }}</td>
+        <td>{{ a['supervisor'] or '-' }}</td>
+        <td>{{ a['desde'] }}</td>
+        <td><span class="badge revision">{{ a['dias'] }} días</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="ayuda" style="margin:0.6rem 0 1rem;">{% if alertas.fuera|length > 10 %}Mostrando 10 de {{ alertas.fuera|length }}. {% endif %}<a href="{{ url_for('pendientes.ver', solo='pendientes') }}">Ver todos los pendientes por ruta →</a></p>
+  {% endif %}
+  {% if alertas.mantenimiento %}
+  <h3 style="font-size:1rem; margin:0.4rem 0;">En reparación {{ alertas.dias_mantenimiento }} días o más ({{ alertas.mantenimiento|length }})</h3>
+  <table>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Enviado</th><th>Días</th><th>Motivo</th></tr></thead>
+    <tbody>
+      {% for a in alertas.mantenimiento[:10] %}
+      <tr>
+        <td>{{ a['id_interno'] }}</td>
+        <td>{{ 'Teléfono' if a['tipo'] == 'telefono' else 'Impresora' }}</td>
+        <td>{{ a['fecha_envio'] }}</td>
+        <td><span class="badge revision">{{ a['dias'] }} días</span></td>
+        <td>{{ a['motivo'] or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="ayuda" style="margin:0.6rem 0 0;">{% if alertas.mantenimiento|length > 10 %}Mostrando 10 de {{ alertas.mantenimiento|length }}. {% endif %}<a href="{{ url_for('mantenimiento.ver') }}">Ir a Mantenimiento →</a></p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="tarjeta">
   <h2>Movimientos de los últimos 14 días</h2>
   <canvas id="grafico-movimientos" height="90"></canvas>
@@ -61,7 +104,7 @@
   <h2>Incidencias abiertas ({{ incidencias|length }})</h2>
   {% if incidencias %}
   <table>
-    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta</th><th>Día del cierre</th><th>Detectada</th></tr></thead>
+    <thead><tr><th>Equipo</th><th>Tipo</th><th>Ruta</th><th>Día del cierre</th><th>Detectada</th>{% if puede('cerrar_dia') %}<th>Resolver a mano</th>{% endif %}</tr></thead>
     <tbody>
       {% for i in incidencias %}
       <tr>
@@ -70,6 +113,14 @@
         <td>{{ i['ruta_codigo'] }}</td>
         <td>{{ i['fecha'] }}</td>
         <td>{{ i['fecha_deteccion'] }}</td>
+        {% if puede('cerrar_dia') %}
+        <td>
+          <form method="post" action="{{ url_for('dashboard.resolver_incidencia', incidencia_id=i['id']) }}" class="en-linea">
+            <input type="text" name="nota" placeholder="Motivo (obligatorio)" required minlength="5" maxlength="300" autocomplete="off" style="width:auto; min-width:170px; margin-bottom:0; font-size:0.85rem; padding:0.35rem 0.5rem;">
+            <button type="submit" style="padding:0.35rem 0.6rem; font-size:0.85rem;">Resolver</button>
+          </form>
+        </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>

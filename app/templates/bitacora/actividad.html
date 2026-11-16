@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block titulo %}Actividad{% endblock %}
+{% block contenido %}
+{% include "bitacora/_pestanas.html" %}
+<div class="tarjeta">
+  <h2>Actividad del sistema</h2>
+  <p class="ayuda">Quién hizo qué y cuándo: usuarios, inventario, mantenimiento, cierres de día, conteos, respaldos y accesos. Los escaneos de salida y retorno están en la pestaña Movimientos.</p>
+  <form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; align-items:end;">
+    <div>
+      <label for="usuario">Persona</label>
+      <select id="usuario" name="usuario">
+        <option value="">Todas</option>
+        {% for u in usuarios %}<option value="{{ u }}" {% if filtros['usuario'] == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="accion">Acción</label>
+      <select id="accion" name="accion">
+        <option value="">Todas</option>
+        {% for k, nombre in acciones.items() %}<option value="{{ k }}" {% if filtros['accion'] == k %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="texto">Buscar texto</label>
+      <input type="text" id="texto" name="texto" value="{{ filtros['texto'] }}" placeholder="IMP-060, DS0001...">
+    </div>
+    <div>
+      <label for="desde">Desde</label>
+      <input type="date" id="desde" name="desde" value="{{ filtros['desde'] }}">
+    </div>
+    <div>
+      <label for="hasta">Hasta</label>
+      <input type="date" id="hasta" name="hasta" value="{{ filtros['hasta'] }}">
+    </div>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="submit">Filtrar</button>
+      <a class="boton secundario" href="{{ url_for('bitacora.actividad') }}">Limpiar</a>
+    </div>
+  </form>
+</div>
+
+<div class="tarjeta">
+  <h2>Registros ({{ pag.total }})</h2>
+  <table>
+    <thead><tr><th>Fecha/hora</th><th>Persona</th><th>Acción</th><th>Sobre</th><th>Detalle</th></tr></thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td style="white-space:nowrap;">{{ f['fecha'] }}</td>
+        <td>{{ f['usuario_nombre'] or '-' }}</td>
+        <td><span class="badge {{ 'revision' if f['accion'] == 'login_fallido' else 'en_bodega' }}">{{ acciones.get(f['accion'], f['accion']) }}</span></td>
+        <td>{{ f['objetivo'] or '' }}</td>
+        <td>{{ f['detalle'] or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="ayuda" style="margin:0;">Todavía no hay actividad registrada con estos filtros.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include "bitacora/_paginacion.html" %}
+</div>
+{% endblock %}

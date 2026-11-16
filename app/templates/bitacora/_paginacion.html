@@ -1,0 +1,9 @@
+<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem; margin-top:1rem;">
+  <span class="ayuda" style="margin:0;">
+    {% if pag.total %}Mostrando {{ pag.desde }}–{{ pag.hasta }} de {{ pag.total }} · página {{ pag.pagina }} de {{ pag.paginas }}{% else %}Sin resultados.{% endif %}
+  </span>
+  <div style="display:flex; gap:0.5rem;">
+    {% if pag.anterior %}<a class="boton secundario" href="{{ pag.anterior }}">← Anterior</a>{% endif %}
+    {% if pag.siguiente %}<a class="boton secundario" href="{{ pag.siguiente }}">Siguiente →</a>{% endif %}
+  </div>
+</div>

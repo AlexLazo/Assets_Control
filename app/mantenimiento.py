@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 from flask_login import current_user
 
+from . import alertas, auditoria
 from .db import get_db
 
 bp = Blueprint("mantenimiento", __name__, url_prefix="/mantenimiento")
@@ -31,7 +32,9 @@ def ver():
            LIMIT 100"""
     ).fetchall()
 
-    return render_template("mantenimiento/ver.html", en_reparacion=en_reparacion, historial=historial)
+    return render_template(
+        "mantenimiento/ver.html", en_reparacion=en_reparacion, historial=historial, dias_alerta=alertas.DIAS_MANTENIMIENTO
+    )
 
 
 @bp.route("/enviar", methods=["POST"])
@@ -70,6 +73,7 @@ def enviar():
         (equipo["id"], motivo, current_user.id),
     )
     db.execute("UPDATE equipos SET estado = 'reparacion' WHERE id = ?", (equipo["id"],))
+    auditoria.registrar(db, "mantenimiento_enviar", id_interno, motivo)
     db.commit()
     flash(f"{id_interno} enviado a mantenimiento.")
     return redirect(url_for("mantenimiento.ver"))
@@ -97,6 +101,11 @@ def regreso(mantenimiento_id):
         (resultado, current_user.id, mantenimiento_id),
     )
     db.execute("UPDATE equipos SET estado = ? WHERE id = ?", (nuevo_estado, mant["equipo_id"]))
+    codigo = db.execute("SELECT id_interno FROM equipos WHERE id = ?", (mant["equipo_id"],)).fetchone()["id_interno"]
+    auditoria.registrar(
+        db, "mantenimiento_regreso", codigo,
+        f"{'Regresa activo' if nuevo_estado == 'activo' else 'Se da de baja'}" + (f". Resultado: {resultado}" if resultado else ""),
+    )
     db.commit()
     flash("Equipo regresado de mantenimiento.")
     return redirect(url_for("mantenimiento.ver"))

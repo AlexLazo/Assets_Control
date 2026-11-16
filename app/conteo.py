@@ -4,6 +4,7 @@ from datetime import datetime
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from . import auditoria
 from .auth import puede, requiere_permiso
 from .db import get_db
 
@@ -81,7 +82,8 @@ def ver():
 def iniciar():
     db = get_db()
     try:
-        db.execute("INSERT INTO conteos (operador_inicio_id) VALUES (?)", (current_user.id,))
+        cur = db.execute("INSERT INTO conteos (operador_inicio_id) VALUES (?)", (current_user.id,))
+        auditoria.registrar(db, "conteo_iniciar", f"Conteo #{cur.lastrowid}")
         db.commit()
         flash("Conteo iniciado. Escanea todo lo que tengas físicamente en bodega.")
     except sqlite3.IntegrityError:
@@ -143,10 +145,13 @@ def escanear():
 @requiere_permiso("conteo_gestionar")
 def cerrar(conteo_id):
     db = get_db()
-    db.execute(
+    cur = db.execute(
         "UPDATE conteos SET estado = 'cerrado', fecha_cierre = datetime('now','localtime') WHERE id = ? AND estado = 'abierto'",
         (conteo_id,),
     )
+    if cur.rowcount:
+        total = db.execute("SELECT COUNT(*) AS n FROM conteo_items WHERE conteo_id = ?", (conteo_id,)).fetchone()["n"]
+        auditoria.registrar(db, "conteo_cerrar", f"Conteo #{conteo_id}", f"{total} equipo(s) contados")
     db.commit()
     return redirect(url_for("conteo.resultado", conteo_id=conteo_id))
 
@@ -188,11 +193,13 @@ def ajustar(conteo_id):
             (e["id"], e["ruta_actual_id"], current_user.id, nota),
         )
         db.execute(
-            """UPDATE incidencias SET estado = 'resuelta', resolucion_nota = ?
+            """UPDATE incidencias SET estado = 'resuelta', resolucion_nota = ?,
+                      resuelta_por_id = ?, fecha_resolucion = datetime('now','localtime')
                WHERE equipo_id = ? AND estado = 'abierta'""",
-            (nota, e["id"]),
+            (nota, current_user.id, e["id"]),
         )
     db.execute("UPDATE conteos SET ajuste_aplicado = 1 WHERE id = ?", (conteo_id,))
+    auditoria.registrar(db, "conteo_ajustar", f"Conteo #{conteo_id}", f"{len(corregir)} equipo(s) registrados como retornados a bodega")
     db.commit()
     flash(f"Ajuste aplicado: {len(corregir)} equipo(s) registrados como retornados a bodega.")
     return redirect(url_for("conteo.resultado", conteo_id=conteo_id))

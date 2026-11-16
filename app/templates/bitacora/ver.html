@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block titulo %}Bitácora{% endblock %}
 {% block contenido %}
+{% include "bitacora/_pestanas.html" %}
 <div class="tarjeta">
   <h2>Excel de control</h2>
-  <p class="ayuda">Un solo archivo con: <strong>quién salió</strong> (y si ya regresó), <strong>quién NO ha regresado</strong>, <strong>quién NO salió</strong>, resumen por ruta, escaneos por usuario y todos los movimientos. Si no eliges fechas, es el de hoy.</p>
+  <p class="ayuda">Un solo archivo con: <strong>quién salió</strong> (y si ya regresó), <strong>quién NO ha regresado</strong>, <strong>quién NO salió</strong>, resumen por ruta, escaneos por usuario, todos los movimientos y la actividad (auditoría). Si no eliges fechas, es el de hoy.</p>
   <form method="get" action="{{ url_for('bitacora.exportar') }}" class="en-linea" style="flex-wrap:wrap; gap:0.75rem;">
     <div><label for="x-desde" style="margin-bottom:0.2rem;">Desde</label><input type="date" id="x-desde" name="desde" value="{{ filtros['desde'] }}" style="margin-bottom:0;"></div>
     <div><label for="x-hasta" style="margin-bottom:0.2rem;">Hasta</label><input type="date" id="x-hasta" name="hasta" value="{{ filtros['hasta'] }}" style="margin-bottom:0;"></div>
@@ -21,6 +22,23 @@
     <div>
       <label for="ruta">Ruta</label>
       <input type="text" id="ruta" name="ruta" value="{{ filtros['ruta'] }}" placeholder="DS0001">
+    </div>
+    <div>
+      <label for="supervisor">Supervisor de la ruta</label>
+      <input type="text" id="supervisor" name="supervisor" value="{{ filtros['supervisor'] }}" placeholder="Kassandra">
+    </div>
+    <div>
+      <label for="operador">Quién escaneó</label>
+      <select id="operador" name="operador">
+        <option value="">Todos</option>
+        {% for o in operadores %}<option value="{{ o['id'] }}" {% if filtros['operador'] == o['id']|string %}selected{% endif %}>{{ o['nombre'] }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="origen">Origen</label>
+      <select id="origen" name="origen">
+        {% for k, nombre in origenes.items() %}<option value="{{ k }}" {% if filtros['origen'] == k %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select>
     </div>
     <div>
       <label for="tipo_equipo">Tipo de equipo</label>
@@ -47,15 +65,23 @@
       <input type="date" id="hasta" name="hasta" value="{{ filtros['hasta'] }}">
     </div>
     <div>
+      <label for="orden">Orden</label>
+      <select id="orden" name="orden">
+        <option value="" {% if filtros['orden'] != 'antiguos' %}selected{% endif %}>Más recientes primero</option>
+        <option value="antiguos" {% if filtros['orden'] == 'antiguos' %}selected{% endif %}>Más antiguos primero</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:0.5rem;">
       <button type="submit">Filtrar</button>
+      <a class="boton secundario" href="{{ url_for('bitacora.ver') }}">Limpiar</a>
     </div>
   </form>
 </div>
 
 <div class="tarjeta">
-  <h2>Movimientos ({{ movimientos|length }}{% if movimientos|length == 500 %}+{% endif %})</h2>
+  <h2>Movimientos ({{ pag.total }})</h2>
   <table>
-    <thead><tr><th>Fecha/hora</th><th>Equipo</th><th>Tipo</th><th>Movimiento</th><th>Ruta</th><th>Operador</th><th>Observación</th></tr></thead>
+    <thead><tr><th>Fecha/hora</th><th>Equipo</th><th>Tipo</th><th>Movimiento</th><th>Ruta</th><th>Supervisor</th><th>Escaneó</th><th>Observación</th></tr></thead>
     <tbody>
       {% for m in movimientos %}
       <tr>
@@ -64,11 +90,13 @@
         <td>{{ 'Teléfono' if m['tipo_equipo'] == 'telefono' else 'Impresora' }}</td>
         <td><span class="badge {{ 'en_ruta' if m['tipo'] == 'salida' else 'en_bodega' }}">{{ 'Salida' if m['tipo'] == 'salida' else 'Retorno' }}</span></td>
         <td>{{ m['ruta_codigo'] }}</td>
+        <td>{{ m['supervisor'] or '-' }}</td>
         <td>{{ m['operador_nombre'] }}</td>
         <td>{{ m['condicion'] or '' }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  {% include "bitacora/_paginacion.html" %}
 </div>
 {% endblock %}

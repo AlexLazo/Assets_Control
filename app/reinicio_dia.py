@@ -16,7 +16,7 @@ from datetime import date
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from . import respaldos
+from . import auditoria, respaldos
 from .auth import requiere_permiso
 from .db import get_db
 
@@ -148,6 +148,11 @@ def ejecutar():
         """INSERT INTO reinicios (dia, usuario_filtro, operador_id, movimientos_borrados, incidencias_borradas, respaldo, detalle)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (dia, usuario["nombre"] if usuario else None, current_user.id, len(ids_mov), len(ids_inc), respaldo.name, detalle),
+    )
+    auditoria.registrar(
+        db, "dia_reiniciar", dia,
+        f"{len(ids_mov)} movimiento(s) y {len(ids_inc)} incidencia(s) borrados"
+        + (f" (solo de {usuario['nombre']})" if usuario else "") + f". Respaldo: {respaldo.name}",
     )
     db.commit()
     flash(

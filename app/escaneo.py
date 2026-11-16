@@ -142,9 +142,10 @@ def retorno():
             # incidencia abierta para un equipo que ya está de vuelta.
             db.execute(
                 """UPDATE incidencias SET estado = 'resuelta',
-                       resolucion_nota = 'Resuelta automáticamente: el equipo registró un retorno.'
+                       resolucion_nota = 'Resuelta automáticamente: el equipo registró un retorno.',
+                       resuelta_por_id = ?, fecha_resolucion = datetime('now','localtime')
                    WHERE equipo_id = ? AND estado = 'abierta'""",
-                (equipo["id"],),
+                (current_user.id, equipo["id"]),
             )
             db.commit()
         except sqlite3.IntegrityError as e:
