@@ -1,5 +1,6 @@
 import re
 import time
+import unicodedata
 from functools import wraps
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -161,7 +162,12 @@ def _buscar_para_login(db, texto: str):
     columnas = "id, nombre, usuario, rol, activo, password_hash, debe_cambiar_password"
     fila = db.execute(f"SELECT {columnas} FROM usuarios WHERE usuario = ? COLLATE NOCASE", (texto,)).fetchone()
     if fila is None:
-        fila = db.execute(f"SELECT {columnas} FROM usuarios WHERE nombre = ? COLLATE NOCASE ORDER BY id LIMIT 1", (texto,)).fetchone()
+        # SQLite solo ignora mayúsculas en letras sin tilde ("óscar" != "Óscar"),
+        # así que el nombre completo se compara en Python (la tabla es pequeña).
+        buscado = unicodedata.normalize("NFC", texto).casefold()
+        for candidato in db.execute(f"SELECT {columnas} FROM usuarios ORDER BY id"):
+            if unicodedata.normalize("NFC", candidato["nombre"]).casefold() == buscado:
+                return candidato
     return fila
 
 

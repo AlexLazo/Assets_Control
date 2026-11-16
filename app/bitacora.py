@@ -1,14 +1,13 @@
 from datetime import date
 
-from flask import Blueprint, abort, render_template, request, send_file, url_for
+from flask import Blueprint, abort, render_template, request, send_file
 
 from . import auditoria, reporte_excel
 from .auth import requiere_permiso
 from .db import get_db
+from .paginacion import paginar
 
 bp = Blueprint("bitacora", __name__, url_prefix="/bitacora")
-
-POR_PAGINA = 100
 
 # Qué escaneos mostrar: "" = todo menos la carga inicial desde Excel (no son escaneos reales).
 ORIGENES = {
@@ -44,26 +43,6 @@ def exportar():
         download_name=nombre,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
-
-def _paginar(db, sql_total: str, sql_filas: str, parametros: list):
-    """Devuelve (filas, paginacion). `sql_filas` termina antes de LIMIT."""
-    total = db.execute(sql_total, parametros).fetchone()[0]
-    paginas = max(1, -(-total // POR_PAGINA))
-    pagina = min(max(request.args.get("pagina", 1, type=int), 1), paginas)
-    filas = db.execute(f"{sql_filas} LIMIT ? OFFSET ?", [*parametros, POR_PAGINA, (pagina - 1) * POR_PAGINA]).fetchall()
-
-    def enlace(n: int) -> str:
-        return url_for(request.endpoint, **{**request.args.to_dict(), "pagina": n})
-
-    pag = {
-        "total": total, "pagina": pagina, "paginas": paginas,
-        "desde": (pagina - 1) * POR_PAGINA + 1 if total else 0,
-        "hasta": min(pagina * POR_PAGINA, total),
-        "anterior": enlace(pagina - 1) if pagina > 1 else None,
-        "siguiente": enlace(pagina + 1) if pagina < paginas else None,
-    }
-    return filas, pag
 
 
 @bp.route("/")
@@ -124,7 +103,7 @@ def ver():
     # `where` solo arma marcadores '?' fijos definidos arriba -- el valor
     # tecleado por el usuario siempre viaja en `parametros`, nunca dentro
     # del texto SQL.
-    movimientos, pag = _paginar(
+    movimientos, pag = paginar(
         db,
         f"SELECT COUNT(*) {desde_sql} {where}",
         f"""SELECT m.id, m.tipo, m.timestamp, m.condicion,
@@ -175,7 +154,7 @@ def actividad():
         parametros.append(filtros["hasta"])
     where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
 
-    filas, pag = _paginar(
+    filas, pag = paginar(
         db,
         f"SELECT COUNT(*) FROM auditoria {where}",
         f"SELECT id, fecha, usuario_nombre, accion, objetivo, detalle FROM auditoria {where} ORDER BY id DESC",

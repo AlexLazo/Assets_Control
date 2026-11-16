@@ -36,7 +36,7 @@
     <tbody>
       {% for a in alertas.fuera[:10] %}
       <tr>
-        <td>{{ a['id_interno'] }}</td>
+        <td><a href="{{ url_for('inventario.ficha', id_interno=a['id_interno']) }}">{{ a['id_interno'] }}</a></td>
         <td>{{ 'Teléfono' if a['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ a['ruta'] }}</td>
         <td>{{ a['supervisor'] or '-' }}</td>
@@ -55,7 +55,7 @@
     <tbody>
       {% for a in alertas.mantenimiento[:10] %}
       <tr>
-        <td>{{ a['id_interno'] }}</td>
+        <td><a href="{{ url_for('inventario.ficha', id_interno=a['id_interno']) }}">{{ a['id_interno'] }}</a></td>
         <td>{{ 'Teléfono' if a['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ a['fecha_envio'] }}</td>
         <td><span class="badge revision">{{ a['dias'] }} días</span></td>
@@ -108,7 +108,7 @@
     <tbody>
       {% for i in incidencias %}
       <tr>
-        <td>{{ i['id_interno'] }}</td>
+        <td><a href="{{ url_for('inventario.ficha', id_interno=i['id_interno']) }}">{{ i['id_interno'] }}</a></td>
         <td>{{ 'Teléfono' if i['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ i['ruta_codigo'] }}</td>
         <td>{{ i['fecha'] }}</td>

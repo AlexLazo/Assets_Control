@@ -86,7 +86,7 @@
       {% for m in movimientos %}
       <tr>
         <td>{{ m['timestamp'] }}</td>
-        <td>{{ m['id_interno'] }}</td>
+        <td><a href="{{ url_for('inventario.ficha', id_interno=m['id_interno']) }}">{{ m['id_interno'] }}</a></td>
         <td>{{ 'Teléfono' if m['tipo_equipo'] == 'telefono' else 'Impresora' }}</td>
         <td><span class="badge {{ 'en_ruta' if m['tipo'] == 'salida' else 'en_bodega' }}">{{ 'Salida' if m['tipo'] == 'salida' else 'Retorno' }}</span></td>
         <td>{{ m['ruta_codigo'] }}</td>
@@ -97,6 +97,6 @@
       {% endfor %}
     </tbody>
   </table>
-  {% include "bitacora/_paginacion.html" %}
+  {% include "_paginacion.html" %}
 </div>
 {% endblock %}

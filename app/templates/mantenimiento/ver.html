@@ -23,7 +23,7 @@
     <tbody>
       {% for m in en_reparacion %}
       <tr>
-        <td>{{ m['id_interno'] }}</td>
+        <td><a href="{{ url_for('inventario.ficha', id_interno=m['id_interno']) }}">{{ m['id_interno'] }}</a></td>
         <td>{{ 'Teléfono' if m['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ m['fecha_envio'] }}</td>
         <td><span class="badge {{ 'revision' if m['dias'] >= dias_alerta else 'en_ruta' }}">{{ m['dias'] }} día{{ 's' if m['dias'] != 1 }}{% if m['dias'] >= dias_alerta %} · atrasado{% endif %}</span></td>

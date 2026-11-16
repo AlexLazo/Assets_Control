@@ -21,7 +21,7 @@ from werkzeug.security import generate_password_hash
 
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 
-VERSION_ACTUAL = 5
+VERSION_ACTUAL = 6
 
 
 def slug_usuario(texto: str) -> str:
@@ -30,6 +30,41 @@ def slug_usuario(texto: str) -> str:
     sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-z0-9]+", ".", sin_tildes.lower()).strip(".")
     return (slug or "usuario")[:30].strip(".") or "usuario"
+
+
+def clave_supervisor(texto: str | None) -> str:
+    """Clave para comparar nombres de supervisor sin fijarse en tildes,
+    mayúsculas ni espacios de más: 'Kassandra  Hernández' == 'KASSANDRA HERNANDEZ'."""
+    sin_tildes = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", sin_tildes).strip().upper()
+
+
+def _v6_unificar_supervisores(con: sqlite3.Connection) -> None:
+    """v6: el supervisor de una ruta es texto libre y quedó escrito de varias
+    formas (KASSANDRA HERNANDEZ / HERNÁNDEZ). Se unifica cada grupo de
+    variantes iguales salvo tildes/mayúsculas/espacios usando la forma más
+    usada (a igualdad, la que no lleva tilde). No toca nombres realmente distintos."""
+    from collections import Counter
+
+    originales = [
+        (f[0], f[1]) for f in con.execute(
+            "SELECT supervisor, COUNT(*) FROM rutas WHERE supervisor IS NOT NULL GROUP BY supervisor"
+        )
+    ]
+    grupos: dict[str, Counter] = {}
+    for original, n in originales:
+        limpio = re.sub(r"\s+", " ", original).strip()
+        if limpio:
+            grupos.setdefault(clave_supervisor(limpio), Counter())[limpio] += n
+    canonico = {
+        clave: max(v, key=lambda x: (v[x], x == clave_supervisor(x), x)) for clave, v in grupos.items()
+    }
+    for original, _ in originales:
+        limpio = re.sub(r"\s+", " ", original).strip()
+        destino = canonico[clave_supervisor(limpio)] if limpio else None
+        if destino != original:
+            con.execute("UPDATE rutas SET supervisor = ? WHERE supervisor = ?", (destino, original))
+    con.commit()
 
 
 def _v4_usuario_login(con: sqlite3.Connection) -> None:
@@ -124,6 +159,7 @@ MIGRACIONES: list[tuple[int, object]] = [
         ALTER TABLE incidencias ADD COLUMN fecha_resolucion  TEXT;
         """,
     ),
+    (6, _v6_unificar_supervisores),
 ]
 
 TABLAS_BASE_V1 = {"equipos", "rutas", "usuarios", "movimientos", "incidencias", "mantenimientos", "conteos", "conteo_items"}
