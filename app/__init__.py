@@ -127,7 +127,9 @@ def create_app() -> Flask:
 
     from . import auth
     login_manager.user_loader(auth.cargar_usuario)
-    app.context_processor(lambda: {"puede": auth.puede, "ROLES": auth.ROLES})
+    from . import alertas
+
+    app.context_processor(lambda: {"puede": auth.puede, "ROLES": auth.ROLES, "alertas_total": alertas.total_para_menu()})
 
     from . import escaneo, dashboard, bitacora, inventario, usuarios, etiquetas, datos, historial, mantenimiento, conteo, pendientes, reinicio_dia
 

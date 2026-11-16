@@ -1,10 +1,18 @@
+import io
+import re
 import sqlite3
+from datetime import date
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
-from .auth import requiere_permiso
+from . import auditoria
+from .auth import puede, requiere_permiso
 from .db import get_db
+from .migraciones import clave_supervisor
+from .paginacion import paginar
 
 bp = Blueprint("inventario", __name__, url_prefix="/inventario")
 
@@ -17,47 +25,249 @@ def _siguiente_id_interno(db, tipo: str) -> str:
     return f"{prefijo}-{siguiente:03d}"
 
 
+# Días que lleva fuera un equipo en ruta (días completos desde su última salida).
+DIAS_FUERA_SQL = "CASE WHEN v.ubicacion = 'en_ruta' THEN CAST(julianday('now','localtime') - julianday(v.desde) AS INTEGER) END"
+ORDENES = {
+    "": ("Pendientes de revisión primero, luego por ID", "e.requiere_revision DESC, e.id_interno"),
+    "id": ("Por ID", "e.id_interno"),
+    "dias": ("Más días fuera primero", f"({DIAS_FUERA_SQL}) IS NULL, {DIAS_FUERA_SQL} DESC, e.id_interno"),
+    "ruta": ("Por ruta asignada", "ra.codigo IS NULL, ra.codigo, e.id_interno"),
+}
+ESTADOS = {"activo": "Activo", "reparacion": "En reparación", "baja": "Dado de baja"}
+
+FROM_INVENTARIO = """FROM equipos e
+            LEFT JOIN v_estado_actual v ON v.equipo_id = e.id
+            LEFT JOIN rutas ra ON ra.id = e.ruta_asignada_id"""
+
+
+def _filtros_inventario():
+    """Lee los filtros de la URL y arma el WHERE (siempre con marcadores '?':
+    lo que teclea el usuario viaja en `parametros`, nunca dentro del SQL)."""
+    a = request.args
+    f = {
+        "buscar": a.get("buscar", "").strip(),
+        "tipo": a.get("tipo", "").strip(),
+        "estado": a.get("estado", "").strip(),
+        "ubicacion": a.get("ubicacion", "").strip(),
+        "ruta": a.get("ruta", "").strip(),
+        "supervisor": a.get("supervisor", "").strip(),
+        "revision": a.get("revision") == "1",
+        "sin_ruta": a.get("sin_ruta") == "1",
+        "orden": a.get("orden", "").strip(),
+    }
+    if f["orden"] not in ORDENES:
+        f["orden"] = ""
+    cond, par = [], []
+    if f["revision"]:
+        cond.append("e.requiere_revision = 1")
+    if f["sin_ruta"]:
+        cond.append("e.ruta_asignada_id IS NULL")
+    if f["buscar"]:
+        cond.append("(e.id_interno LIKE ? OR e.serial_fabrica LIKE ? OR e.numero_telefono LIKE ?)")
+        par += [f"%{f['buscar'].upper()}%"] * 3
+    if f["tipo"] in ("telefono", "impresora"):
+        cond.append("e.tipo = ?")
+        par.append(f["tipo"])
+    if f["estado"] in ESTADOS:
+        cond.append("e.estado = ?")
+        par.append(f["estado"])
+    if f["ubicacion"] in ("en_ruta", "en_bodega"):
+        cond.append("v.ubicacion = ?")
+        par.append(f["ubicacion"])
+    if f["ruta"]:
+        cond.append("ra.codigo LIKE ?")
+        par.append(f"%{f['ruta'].upper()}%")
+    if f["supervisor"]:
+        cond.append("ra.supervisor LIKE ?")
+        par.append(f"%{f['supervisor']}%")
+    return f, (f"WHERE {' AND '.join(cond)}" if cond else ""), par
+
+
 @bp.route("/")
 @login_required
 def listado():
     db = get_db()
-    solo_revision = request.args.get("revision") == "1"
-    solo_sin_ruta = request.args.get("sin_ruta") == "1"
-    buscar = request.args.get("buscar", "").strip()
+    filtros, where, parametros = _filtros_inventario()
 
-    condiciones = []
-    parametros = []
-    if solo_revision:
-        condiciones.append("e.requiere_revision = 1")
-    if solo_sin_ruta:
-        condiciones.append("e.ruta_asignada_id IS NULL")
-    if buscar:
-        condiciones.append("(e.id_interno LIKE ? OR e.serial_fabrica LIKE ? OR e.numero_telefono LIKE ?)")
-        comodin = f"%{buscar.upper()}%"
-        parametros += [comodin, comodin, comodin]
-    where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
-
-    equipos = db.execute(
-        f"""SELECT e.*, v.ubicacion, ra.codigo AS ruta_asignada_codigo
-            FROM equipos e
-            LEFT JOIN v_estado_actual v ON v.equipo_id = e.id
-            LEFT JOIN rutas ra ON ra.id = e.ruta_asignada_id
-            {where}
-            ORDER BY e.requiere_revision DESC, e.id_interno""",
+    equipos, pag = paginar(
+        db,
+        f"SELECT COUNT(*) {FROM_INVENTARIO} {where}",
+        f"""SELECT e.*, v.ubicacion, v.desde, ra.codigo AS ruta_asignada_codigo, ra.supervisor AS supervisor,
+                   {DIAS_FUERA_SQL} AS dias_fuera
+            {FROM_INVENTARIO} {where}
+            ORDER BY {ORDENES[filtros['orden']][1]}""",
         parametros,
-    ).fetchall()
+    )
 
     total_revision = db.execute("SELECT COUNT(*) AS n FROM equipos WHERE requiere_revision = 1").fetchone()["n"]
     total_sin_ruta = db.execute("SELECT COUNT(*) AS n FROM equipos WHERE ruta_asignada_id IS NULL").fetchone()["n"]
+    total_equipos = db.execute("SELECT COUNT(*) AS n FROM equipos").fetchone()["n"]
+    rutas = db.execute("SELECT id, codigo FROM rutas WHERE activa = 1 ORDER BY codigo").fetchall() if puede("inventario_editar") else []
 
     return render_template(
         "inventario/listado.html",
-        equipos=equipos,
-        solo_revision=solo_revision,
-        solo_sin_ruta=solo_sin_ruta,
-        buscar=buscar,
-        total_revision=total_revision,
-        total_sin_ruta=total_sin_ruta,
+        equipos=equipos, pag=pag, filtros=filtros, ordenes={k: v[0] for k, v in ORDENES.items()}, estados=ESTADOS,
+        total_revision=total_revision, total_sin_ruta=total_sin_ruta, total_equipos=total_equipos, rutas=rutas,
+        volver=request.full_path.rstrip("?"),
+    )
+
+
+@bp.route("/exportar")
+@requiere_permiso("inventario_editar")
+def exportar():
+    """Excel del inventario con los mismos filtros de la pantalla (sin PIN)."""
+    db = get_db()
+    filtros, where, parametros = _filtros_inventario()
+    filas = db.execute(
+        f"""SELECT e.id_interno, e.tipo, e.serial_fabrica, e.numero_telefono, e.modelo, e.fabricante, e.estado,
+                   e.requiere_revision, e.notas, v.ubicacion, {DIAS_FUERA_SQL} AS dias_fuera,
+                   ra.codigo AS ruta, ra.supervisor AS supervisor
+            {FROM_INVENTARIO} {where}
+            ORDER BY {ORDENES[filtros['orden']][1]}""",
+        parametros,
+    ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
+    cabecera = ["ID", "Tipo", "Serial", "Teléfono", "Modelo", "Fabricante", "Estado", "Ubicación", "Días fuera",
+                "Ruta asignada", "Supervisor", "Requiere revisión", "Notas"]
+    ws.append(cabecera)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1F2937")
+        c.alignment = Alignment(vertical="center", wrap_text=True)
+    for f in filas:
+        ws.append([
+            f["id_interno"], "Teléfono" if f["tipo"] == "telefono" else "Impresora", f["serial_fabrica"], f["numero_telefono"],
+            f["modelo"], f["fabricante"], ESTADOS.get(f["estado"], f["estado"]),
+            "En ruta" if f["ubicacion"] == "en_ruta" else "En bodega", f["dias_fuera"],
+            f["ruta"], f["supervisor"], "Sí" if f["requiere_revision"] else "", f["notas"],
+        ])
+    ws.freeze_panes = "A2"
+    if filas:
+        ws.auto_filter.ref = ws.dimensions
+    for col in ws.columns:
+        ancho = max(len(str(c.value)) if c.value is not None else 0 for c in col)
+        ws.column_dimensions[col[0].column_letter].width = min(max(ancho + 2, 10), 42)
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return send_file(
+        buffer, as_attachment=True, download_name=f"inventario_{date.today().isoformat()}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+def _volver() -> str:
+    """A dónde regresar tras una acción: solo rutas internas del propio sitio."""
+    destino = request.form.get("volver", "")
+    if destino.startswith("/") and not destino.startswith("//") and "\\" not in destino:
+        return destino
+    return url_for("inventario.listado")
+
+
+@bp.route("/asignar-ruta", methods=["POST"])
+@requiere_permiso("inventario_editar")
+def asignar_ruta():
+    """Asigna (o quita) la ruta de varios equipos a la vez. Solo Admin y Super Admin."""
+    db = get_db()
+    ids = list(dict.fromkeys(i.strip().upper() for i in request.form.getlist("ids") if i.strip()))[:1000]
+    seleccion = request.form.get("ruta_id", "")
+    if not ids:
+        flash("Marca al menos un equipo para asignarle ruta.", "error")
+        return redirect(_volver())
+
+    if seleccion == "quitar":
+        ruta = None
+    elif seleccion.isdigit():
+        ruta = db.execute("SELECT id, codigo FROM rutas WHERE id = ? AND activa = 1", (int(seleccion),)).fetchone()
+        if ruta is None:
+            flash("Esa ruta no existe o está desactivada.", "error")
+            return redirect(_volver())
+    else:
+        flash("Elige la ruta que quieres asignar (o 'Quitar ruta').", "error")
+        return redirect(_volver())
+
+    destino_id = ruta["id"] if ruta else None
+    destino_txt = ruta["codigo"] if ruta else None
+    cambiados = 0
+    for id_interno in ids:
+        e = db.execute(
+            """SELECT e.id, ra.codigo AS ruta FROM equipos e LEFT JOIN rutas ra ON ra.id = e.ruta_asignada_id
+               WHERE e.id_interno = ?""",
+            (id_interno,),
+        ).fetchone()
+        if e is None or e["ruta"] == destino_txt:
+            continue
+        db.execute("UPDATE equipos SET ruta_asignada_id = ? WHERE id = ?", (destino_id, e["id"]))
+        auditoria.registrar(
+            db, "equipo_editar", id_interno,
+            f"Ruta asignada: {e['ruta'] or '(vacío)'} → {destino_txt or '(vacío)'} (asignación masiva)",
+        )
+        cambiados += 1
+    db.commit()
+
+    if cambiados:
+        accion = f"asignada la ruta {destino_txt}" if ruta else "quitada la ruta"
+        flash(f"Listo: {cambiados} equipo(s) con {accion}." + (f" {len(ids) - cambiados} ya la tenían." if cambiados < len(ids) else ""))
+    else:
+        flash("Ningún equipo cambió: ya tenían esa ruta (o no existen).")
+    return redirect(_volver())
+
+
+@bp.route("/<id_interno>/ficha")
+@login_required
+def ficha(id_interno):
+    """Hoja de vida del equipo: dónde está, y todo lo que le ha pasado."""
+    db = get_db()
+    equipo = db.execute(
+        """SELECT e.*, ra.codigo AS ruta_asignada_codigo, ra.supervisor AS supervisor
+           FROM equipos e LEFT JOIN rutas ra ON ra.id = e.ruta_asignada_id WHERE e.id_interno = ?""",
+        (id_interno.strip().upper(),),
+    ).fetchone()
+    if equipo is None:
+        flash(f"No existe el equipo {id_interno}.", "error")
+        return redirect(url_for("inventario.listado"))
+
+    actual = db.execute(
+        f"""SELECT v.ubicacion, v.desde, r.codigo AS ruta, r.supervisor AS supervisor, {DIAS_FUERA_SQL} AS dias_fuera
+            FROM v_estado_actual v LEFT JOIN rutas r ON r.id = v.ruta_actual_id
+            WHERE v.equipo_id = ?""",
+        (equipo["id"],),
+    ).fetchone()
+
+    movimientos = db.execute(
+        """SELECT m.timestamp, m.tipo, m.condicion, r.codigo AS ruta, o.nombre AS operador
+           FROM movimientos m JOIN rutas r ON r.id = m.ruta_id JOIN usuarios o ON o.id = m.operador_id
+           WHERE m.equipo_id = ? ORDER BY m.id DESC LIMIT 200""",
+        (equipo["id"],),
+    ).fetchall()
+    mantenimientos = db.execute(
+        """SELECT m.fecha_envio, m.fecha_retorno, m.motivo, m.resultado, m.estado,
+                  CAST(julianday(COALESCE(m.fecha_retorno, datetime('now','localtime'))) - julianday(m.fecha_envio) AS INTEGER) AS dias,
+                  u.nombre AS envio_por, u2.nombre AS retorno_por
+           FROM mantenimientos m JOIN usuarios u ON u.id = m.operador_envio_id
+           LEFT JOIN usuarios u2 ON u2.id = m.operador_retorno_id
+           WHERE m.equipo_id = ? ORDER BY m.id DESC""",
+        (equipo["id"],),
+    ).fetchall()
+    incidencias = db.execute(
+        """SELECT i.fecha, i.estado, i.resolucion_nota, i.fecha_resolucion, r.codigo AS ruta, u.nombre AS resuelta_por
+           FROM incidencias i JOIN rutas r ON r.id = i.ruta_id LEFT JOIN usuarios u ON u.id = i.resuelta_por_id
+           WHERE i.equipo_id = ? ORDER BY i.id DESC""",
+        (equipo["id"],),
+    ).fetchall()
+    cambios = []
+    if puede("bitacora"):
+        cambios = db.execute(
+            "SELECT fecha, usuario_nombre, accion, detalle FROM auditoria WHERE objetivo = ? ORDER BY id DESC LIMIT 100",
+            (equipo["id_interno"],),
+        ).fetchall()
+
+    return render_template(
+        "inventario/ficha.html", equipo=equipo, actual=actual, movimientos=movimientos, mantenimientos=mantenimientos,
+        incidencias=incidencias, cambios=cambios, acciones=auditoria.ACCIONES,
     )
 
 
@@ -87,6 +297,7 @@ def nuevo():
                 request.form.get("ruta_asignada_id", type=int) or None,
             ),
         )
+        auditoria.registrar(db, "equipo_crear", id_interno, f"Tipo: {tipo}")
         db.commit()
         flash(f"Equipo {id_interno} creado. No olvides imprimirle su etiqueta QR en Admin → Etiquetas.")
         return redirect(url_for("inventario.editar", id_interno=id_interno))
@@ -133,21 +344,31 @@ def editar(id_interno):
                 (current_user.id, equipo["id"]),
             )
 
+        nuevos = {
+            "modelo": request.form.get("modelo") or None,
+            "fabricante": request.form.get("fabricante") or None,
+            "serial_fabrica": request.form.get("serial_fabrica") or None,
+            "numero_telefono": request.form.get("numero_telefono") or None,
+            "estado": nuevo_estado,
+            "notas": request.form.get("notas") or None,
+            "requiere_revision": 1 if request.form.get("requiere_revision") else 0,
+            "ruta_asignada_id": request.form.get("ruta_asignada_id", type=int) or None,
+        }
         db.execute(
             """UPDATE equipos SET modelo = ?, fabricante = ?, serial_fabrica = ?, numero_telefono = ?,
                    estado = ?, notas = ?, requiere_revision = ?, ruta_asignada_id = ? WHERE id = ?""",
-            (
-                request.form.get("modelo") or None,
-                request.form.get("fabricante") or None,
-                request.form.get("serial_fabrica") or None,
-                request.form.get("numero_telefono") or None,
-                nuevo_estado,
-                request.form.get("notas") or None,
-                1 if request.form.get("requiere_revision") else 0,
-                request.form.get("ruta_asignada_id", type=int) or None,
-                equipo["id"],
-            ),
+            (*nuevos.values(), equipo["id"]),
         )
+        # La ruta se guarda como id; para la auditoría se muestra su código.
+        codigos = {r["id"]: r["codigo"] for r in db.execute("SELECT id, codigo FROM rutas")}
+        antes = dict(equipo, ruta_asignada_id=codigos.get(equipo["ruta_asignada_id"]))
+        despues = dict(nuevos, ruta_asignada_id=codigos.get(nuevos["ruta_asignada_id"]))
+        cambio = auditoria.cambios(antes, despues, {
+            "modelo": "Modelo", "fabricante": "Fabricante", "serial_fabrica": "Serial", "numero_telefono": "Teléfono",
+            "estado": "Estado", "notas": "Notas", "requiere_revision": "Requiere revisión", "ruta_asignada_id": "Ruta asignada",
+        })
+        if cambio:
+            auditoria.registrar(db, "equipo_editar", id_interno, cambio)
         db.commit()
         flash(f"{id_interno} actualizado.")
         return redirect(url_for("inventario.listado"))
@@ -166,12 +387,35 @@ def eliminar(id_interno):
         return redirect(url_for("inventario.listado"))
     try:
         db.execute("DELETE FROM equipos WHERE id = ?", (equipo["id"],))
+        auditoria.registrar(db, "equipo_eliminar", id_interno)
         db.commit()
         flash(f"{id_interno} eliminado.")
     except sqlite3.IntegrityError:
         db.rollback()
         flash(f"No se puede eliminar {id_interno}: ya tiene movimientos registrados. Márcalo como 'Dado de baja' en su lugar.", "error")
     return redirect(url_for("inventario.listado"))
+
+
+def _supervisor_canonico(db, texto: str, excepto_id: int | None = None) -> str | None:
+    """Evita que el mismo supervisor quede escrito de dos formas (tildes,
+    mayúsculas, espacios): si ya existe, se usa EXACTAMENTE como está escrito en
+    otra ruta; si es nuevo, se guarda en mayúsculas como el resto."""
+    texto = re.sub(r"\s+", " ", texto or "").strip()
+    if not texto:
+        return None
+    clave = clave_supervisor(texto)
+    for fila in db.execute(
+        "SELECT DISTINCT supervisor FROM rutas WHERE supervisor IS NOT NULL AND id IS NOT ?", (excepto_id,)
+    ):
+        if clave_supervisor(fila["supervisor"]) == clave:
+            return fila["supervisor"]
+    return texto.upper()
+
+
+def _supervisores(db) -> list[str]:
+    return [f["supervisor"] for f in db.execute(
+        "SELECT DISTINCT supervisor FROM rutas WHERE supervisor IS NOT NULL ORDER BY supervisor"
+    )]
 
 
 @bp.route("/rutas", methods=["GET", "POST"])
@@ -182,6 +426,9 @@ def rutas():
         ruta_id = request.form.get("ruta_id", type=int)
         nueva_activa = request.form.get("nueva_activa", type=int)
         db.execute("UPDATE rutas SET activa = ? WHERE id = ?", (nueva_activa, ruta_id))
+        ruta = db.execute("SELECT codigo FROM rutas WHERE id = ?", (ruta_id,)).fetchone()
+        if ruta:
+            auditoria.registrar(db, "ruta_estado", ruta["codigo"], "Activada" if nueva_activa else "Desactivada")
         db.commit()
         return redirect(url_for("inventario.rutas"))
 
@@ -201,7 +448,7 @@ def nueva_ruta():
     db = get_db()
     if request.method == "POST":
         codigo = request.form.get("codigo", "").strip().upper()
-        supervisor = request.form.get("supervisor", "").strip() or None
+        supervisor = _supervisor_canonico(db, request.form.get("supervisor", ""))
         if not codigo:
             flash("El código de ruta no puede estar vacío.", "error")
             return redirect(url_for("inventario.nueva_ruta"))
@@ -209,11 +456,12 @@ def nueva_ruta():
             flash(f"Ya existe la ruta {codigo}.", "error")
             return redirect(url_for("inventario.nueva_ruta"))
         db.execute("INSERT INTO rutas (codigo, supervisor) VALUES (?, ?)", (codigo, supervisor))
+        auditoria.registrar(db, "ruta_crear", codigo, f"Supervisor: {supervisor or '(ninguno)'}")
         db.commit()
         flash(f"Ruta {codigo} creada.")
         return redirect(url_for("inventario.rutas"))
 
-    return render_template("inventario/nueva_ruta.html")
+    return render_template("inventario/nueva_ruta.html", supervisores=_supervisores(db))
 
 
 @bp.route("/rutas/<int:ruta_id>/editar", methods=["GET", "POST"])
@@ -227,20 +475,23 @@ def editar_ruta(ruta_id):
 
     if request.method == "POST":
         codigo = request.form.get("codigo", "").strip().upper()
-        supervisor = request.form.get("supervisor", "").strip() or None
+        supervisor = _supervisor_canonico(db, request.form.get("supervisor", ""), excepto_id=ruta_id)
         if not codigo:
             flash("El código no puede estar vacío.", "error")
-            return render_template("inventario/editar_ruta.html", ruta=ruta)
+            return render_template("inventario/editar_ruta.html", ruta=ruta, supervisores=_supervisores(db))
         existente = db.execute("SELECT id FROM rutas WHERE codigo = ? AND id != ?", (codigo, ruta_id)).fetchone()
         if existente:
             flash(f"Ya existe otra ruta con el código {codigo}.", "error")
-            return render_template("inventario/editar_ruta.html", ruta=ruta)
+            return render_template("inventario/editar_ruta.html", ruta=ruta, supervisores=_supervisores(db))
         db.execute("UPDATE rutas SET codigo = ?, supervisor = ? WHERE id = ?", (codigo, supervisor, ruta_id))
+        cambio = auditoria.cambios(ruta, {"codigo": codigo, "supervisor": supervisor}, {"codigo": "Código", "supervisor": "Supervisor"})
+        if cambio:
+            auditoria.registrar(db, "ruta_editar", codigo, cambio)
         db.commit()
         flash("Ruta actualizada.")
         return redirect(url_for("inventario.rutas"))
 
-    return render_template("inventario/editar_ruta.html", ruta=ruta)
+    return render_template("inventario/editar_ruta.html", ruta=ruta, supervisores=_supervisores(db))
 
 
 @bp.route("/rutas/<int:ruta_id>/eliminar", methods=["POST"])
@@ -253,6 +504,7 @@ def eliminar_ruta(ruta_id):
         return redirect(url_for("inventario.rutas"))
     try:
         db.execute("DELETE FROM rutas WHERE id = ?", (ruta_id,))
+        auditoria.registrar(db, "ruta_eliminar", ruta["codigo"])
         db.commit()
         flash(f"Ruta {ruta['codigo']} eliminada.")
     except sqlite3.IntegrityError:

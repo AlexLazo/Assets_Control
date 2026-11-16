@@ -12,17 +12,82 @@ modificación a schema.sql (instalaciones nuevas) y una entrada en MIGRACIONES
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
 
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 
-VERSION_ACTUAL = 3
+VERSION_ACTUAL = 6
 
-# (version, script SQL) -- solo cambios posteriores a la versión 1.
-MIGRACIONES: list[tuple[int, str]] = [
+
+def slug_usuario(texto: str) -> str:
+    """'Bryan Galdámez' -> 'bryan.galdamez': base para el usuario de login de
+    las cuentas que ya existían (el Admin puede cambiarlo después)."""
+    sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", ".", sin_tildes.lower()).strip(".")
+    return (slug or "usuario")[:30].strip(".") or "usuario"
+
+
+def clave_supervisor(texto: str | None) -> str:
+    """Clave para comparar nombres de supervisor sin fijarse en tildes,
+    mayúsculas ni espacios de más: 'Kassandra  Hernández' == 'KASSANDRA HERNANDEZ'."""
+    sin_tildes = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", sin_tildes).strip().upper()
+
+
+def _v6_unificar_supervisores(con: sqlite3.Connection) -> None:
+    """v6: el supervisor de una ruta es texto libre y quedó escrito de varias
+    formas (KASSANDRA HERNANDEZ / HERNÁNDEZ). Se unifica cada grupo de
+    variantes iguales salvo tildes/mayúsculas/espacios usando la forma más
+    usada (a igualdad, la que no lleva tilde). No toca nombres realmente distintos."""
+    from collections import Counter
+
+    originales = [
+        (f[0], f[1]) for f in con.execute(
+            "SELECT supervisor, COUNT(*) FROM rutas WHERE supervisor IS NOT NULL GROUP BY supervisor"
+        )
+    ]
+    grupos: dict[str, Counter] = {}
+    for original, n in originales:
+        limpio = re.sub(r"\s+", " ", original).strip()
+        if limpio:
+            grupos.setdefault(clave_supervisor(limpio), Counter())[limpio] += n
+    canonico = {
+        clave: max(v, key=lambda x: (v[x], x == clave_supervisor(x), x)) for clave, v in grupos.items()
+    }
+    for original, _ in originales:
+        limpio = re.sub(r"\s+", " ", original).strip()
+        destino = canonico[clave_supervisor(limpio)] if limpio else None
+        if destino != original:
+            con.execute("UPDATE rutas SET supervisor = ? WHERE supervisor = ?", (destino, original))
+    con.commit()
+
+
+def _v4_usuario_login(con: sqlite3.Connection) -> None:
+    """v4: el login deja de ser el nombre completo. `usuario` es el nombre corto
+    para entrar (AlexLz); `nombre` queda solo para mostrar en bitácora y reportes."""
+    con.execute("ALTER TABLE usuarios ADD COLUMN usuario TEXT")
+    con.execute("ALTER TABLE usuarios ADD COLUMN debe_cambiar_password BOOLEAN NOT NULL DEFAULT 0")
+    usados: set[str] = set()
+    for fila in con.execute("SELECT id, nombre FROM usuarios ORDER BY id").fetchall():
+        base = slug_usuario(fila[1])
+        candidato, n = base, 2
+        while candidato in usados:
+            sufijo = str(n)
+            candidato = base[: 30 - len(sufijo)] + sufijo
+            n += 1
+        usados.add(candidato)
+        con.execute("UPDATE usuarios SET usuario = ? WHERE id = ?", (candidato, fila[0]))
+    con.execute("CREATE UNIQUE INDEX idx_usuarios_usuario ON usuarios(usuario COLLATE NOCASE)")
+    con.commit()
+
+
+# (version, script SQL o función(con)) -- solo cambios posteriores a la versión 1.
+MIGRACIONES: list[tuple[int, object]] = [
     # v2: roles Supervisor / Facturador / Admin / Super Admin. SQLite no puede
     # cambiar un CHECK con ALTER TABLE, así que se reconstruye la tabla (el
     # procedimiento oficial: crear, copiar, borrar la vieja, renombrar).
@@ -71,6 +136,30 @@ MIGRACIONES: list[tuple[int, str]] = [
         );
         """,
     ),
+    (4, _v4_usuario_login),
+    # v5: auditoría (quién hizo qué) y quién/cuándo resolvió cada incidencia.
+    # auditoria.usuario_id NO es llave foránea a propósito: el nombre queda
+    # copiado en usuario_nombre y el registro sobrevive aunque se borre al usuario.
+    (
+        5,
+        """
+        CREATE TABLE auditoria (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha           TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            usuario_id      INTEGER,
+            usuario_nombre  TEXT,
+            accion          TEXT NOT NULL,
+            objetivo        TEXT,
+            detalle         TEXT
+        );
+        CREATE INDEX idx_auditoria_fecha   ON auditoria(fecha);
+        CREATE INDEX idx_auditoria_usuario ON auditoria(usuario_id);
+        CREATE INDEX idx_auditoria_accion  ON auditoria(accion);
+        ALTER TABLE incidencias ADD COLUMN resuelta_por_id   INTEGER REFERENCES usuarios(id);
+        ALTER TABLE incidencias ADD COLUMN fecha_resolucion  TEXT;
+        """,
+    ),
+    (6, _v6_unificar_supervisores),
 ]
 
 TABLAS_BASE_V1 = {"equipos", "rutas", "usuarios", "movimientos", "incidencias", "mantenimientos", "conteos", "conteo_items"}
@@ -110,7 +199,10 @@ def actualizar(ruta_db: str | Path) -> int:
 
         for ver, sql in sorted(MIGRACIONES):
             if ver > version:
-                con.executescript(sql)
+                if callable(sql):
+                    sql(con)
+                else:
+                    con.executescript(sql)
                 con.execute(f"PRAGMA foreign_keys = ON")
                 problemas = con.execute("PRAGMA foreign_key_check").fetchall()
                 if problemas:
@@ -139,11 +231,20 @@ def asegurar_admin(ruta_db: str | Path) -> None:
         hay_admin = con.execute("SELECT 1 FROM usuarios WHERE rol='super_admin' AND activo=1 LIMIT 1").fetchone()
         if hay_admin and not forzar:
             return
-        con.execute(
-            """INSERT INTO usuarios (nombre, password_hash, rol, activo) VALUES (?, ?, 'super_admin', 1)
-               ON CONFLICT(nombre) DO UPDATE SET password_hash = excluded.password_hash, rol = 'super_admin', activo = 1""",
-            (nombre, generate_password_hash(password)),
-        )
+        existente = con.execute(
+            "SELECT id FROM usuarios WHERE nombre = ? OR usuario = ? COLLATE NOCASE ORDER BY id LIMIT 1", (nombre, nombre)
+        ).fetchone()
+        if existente:
+            con.execute(
+                """UPDATE usuarios SET password_hash = ?, rol = 'super_admin', activo = 1,
+                          debe_cambiar_password = 0, usuario = COALESCE(usuario, ?) WHERE id = ?""",
+                (generate_password_hash(password), nombre, existente[0]),
+            )
+        else:
+            con.execute(
+                "INSERT INTO usuarios (nombre, usuario, password_hash, rol, activo) VALUES (?, ?, ?, 'super_admin', 1)",
+                (nombre, nombre, generate_password_hash(password)),
+            )
         con.commit()
         accion = "Se restableció la contraseña del Admin" if hay_admin else "Se creó el Admin"
         print(f"[arranque] {accion} '{nombre}' desde las variables de entorno.")

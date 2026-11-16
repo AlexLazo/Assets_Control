@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block titulo %}{{ equipo['id_interno'] }}{% endblock %}
+{% block contenido %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem;">
+  <h2 style="margin:0;">{{ equipo['id_interno'] }} · {{ 'Teléfono' if equipo['tipo'] == 'telefono' else 'Impresora' }}</h2>
+  <div style="display:flex; gap:0.5rem;">
+    <a class="boton secundario" href="{{ url_for('inventario.listado') }}">← Inventario</a>
+    {% if puede('inventario_editar') %}<a class="boton" href="{{ url_for('inventario.editar', id_interno=equipo['id_interno']) }}">Editar</a>{% endif %}
+  </div>
+</div>
+
+<div class="tarjeta">
+  <h2>Situación actual</h2>
+  <table>
+    <tbody>
+      <tr><th style="width:11rem;">Estado</th><td>{{ {'activo': 'Activo', 'reparacion': 'En reparación', 'baja': 'Dado de baja'}.get(equipo['estado'], equipo['estado']) }}{% if equipo['requiere_revision'] %} <span class="badge revision">requiere revisión</span>{% endif %}</td></tr>
+      <tr><th>Ubicación</th><td>
+        {% if actual and actual['ubicacion'] == 'en_ruta' %}
+          <span class="badge en_ruta">En ruta</span> {{ actual['ruta'] }} · desde {{ actual['desde'] }} ({{ actual['dias_fuera'] }} día{{ 's' if actual['dias_fuera'] != 1 }})
+        {% else %}
+          <span class="badge en_bodega">En bodega</span>{% if actual and actual['desde'] %} desde {{ actual['desde'] }}{% endif %}
+        {% endif %}
+      </td></tr>
+      <tr><th>Ruta asignada</th><td>{{ equipo['ruta_asignada_codigo'] or 'Sin asignar' }}{% if equipo['supervisor'] %} · supervisor {{ equipo['supervisor'] }}{% endif %}</td></tr>
+      {% if equipo['serial_fabrica'] %}<tr><th>Serial</th><td>{{ equipo['serial_fabrica'] }}</td></tr>{% endif %}
+      {% if equipo['numero_telefono'] %}<tr><th>Línea</th><td>{{ equipo['numero_telefono'] }}</td></tr>{% endif %}
+      {% if equipo['modelo'] or equipo['fabricante'] %}<tr><th>Modelo</th><td>{{ equipo['fabricante'] or '' }} {{ equipo['modelo'] or '' }}</td></tr>{% endif %}
+      <tr><th>Alta en el sistema</th><td>{{ equipo['fecha_alta'] }}</td></tr>
+      {% if equipo['notas'] %}<tr><th>Notas</th><td>{{ equipo['notas'] }}</td></tr>{% endif %}
+    </tbody>
+  </table>
+</div>
+
+<div class="tarjeta">
+  <h2>Movimientos ({{ movimientos|length }}{% if movimientos|length == 200 %}+ · últimos 200{% endif %})</h2>
+  {% if movimientos %}
+  <table>
+    <thead><tr><th>Fecha/hora</th><th>Movimiento</th><th>Ruta</th><th>Registró</th><th>Observación</th></tr></thead>
+    <tbody>
+      {% for m in movimientos %}
+      <tr>
+        <td>{{ m['timestamp'] }}</td>
+        <td><span class="badge {{ 'en_ruta' if m['tipo'] == 'salida' else 'en_bodega' }}">{{ 'Salida' if m['tipo'] == 'salida' else 'Retorno' }}</span></td>
+        <td>{{ m['ruta'] }}</td><td>{{ m['operador'] }}</td><td>{{ m['condicion'] or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="ayuda" style="margin:0;">Este equipo todavía no tiene movimientos.</p>{% endif %}
+</div>
+
+<div class="tarjeta">
+  <h2>Mantenimientos ({{ mantenimientos|length }})</h2>
+  {% if mantenimientos %}
+  <table>
+    <thead><tr><th>Envío</th><th>Retorno</th><th>Días</th><th>Motivo</th><th>Resultado</th><th>Por</th></tr></thead>
+    <tbody>
+      {% for m in mantenimientos %}
+      <tr>
+        <td>{{ m['fecha_envio'] }}</td>
+        <td>{% if m['fecha_retorno'] %}{{ m['fecha_retorno'] }}{% else %}<span class="badge reparacion">en reparación</span>{% endif %}</td>
+        <td>{{ m['dias'] }}</td><td>{{ m['motivo'] or '-' }}</td><td>{{ m['resultado'] or '-' }}</td>
+        <td>{{ m['envio_por'] }}{% if m['retorno_por'] %} / {{ m['retorno_por'] }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="ayuda" style="margin:0;">Sin mantenimientos.</p>{% endif %}
+</div>
+
+<div class="tarjeta">
+  <h2>Incidencias ({{ incidencias|length }})</h2>
+  {% if incidencias %}
+  <table>
+    <thead><tr><th>Día del cierre</th><th>Ruta</th><th>Estado</th><th>Resolución</th></tr></thead>
+    <tbody>
+      {% for i in incidencias %}
+      <tr>
+        <td>{{ i['fecha'] }}</td><td>{{ i['ruta'] }}</td>
+        <td><span class="badge {{ 'revision' if i['estado'] == 'abierta' else 'en_bodega' }}">{{ i['estado'] }}</span></td>
+        <td>{{ i['resolucion_nota'] or '' }}{% if i['resuelta_por'] %} — {{ i['resuelta_por'] }}{% if i['fecha_resolucion'] %}, {{ i['fecha_resolucion'] }}{% endif %}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="ayuda" style="margin:0;">Sin incidencias.</p>{% endif %}
+</div>
+
+{% if puede('bitacora') %}
+<div class="tarjeta">
+  <h2>Cambios y acciones sobre este equipo ({{ cambios|length }})</h2>
+  {% if cambios %}
+  <table>
+    <thead><tr><th>Fecha/hora</th><th>Persona</th><th>Acción</th><th>Detalle</th></tr></thead>
+    <tbody>
+      {% for c in cambios %}
+      <tr><td style="white-space:nowrap;">{{ c['fecha'] }}</td><td>{{ c['usuario_nombre'] or '-' }}</td><td>{{ acciones.get(c['accion'], c['accion']) }}</td><td>{{ c['detalle'] or '' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="ayuda" style="margin:0;">Sin cambios registrados.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

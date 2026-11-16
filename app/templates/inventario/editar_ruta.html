@@ -8,7 +8,9 @@
     <input type="text" id="codigo" name="codigo" value="{{ ruta['codigo'] }}">
 
     <label for="supervisor">Supervisor</label>
-    <input type="text" id="supervisor" name="supervisor" value="{{ ruta['supervisor'] or '' }}">
+    <input type="text" id="supervisor" name="supervisor" value="{{ ruta['supervisor'] or '' }}" list="lista-supervisores" autocomplete="off">
+    <datalist id="lista-supervisores">{% for s in supervisores %}<option value="{{ s }}">{% endfor %}</datalist>
+    <p class="ayuda" style="margin-top:-0.6rem;">Elige uno de la lista para no duplicarlo; si ya existe escrito con otras tildes o mayúsculas, se unifica solo.</p>
 
     <button type="submit">Guardar</button>
     <a class="boton secundario" href="{{ url_for('inventario.rutas') }}">Cancelar</a>

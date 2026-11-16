@@ -11,6 +11,8 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from . import auditoria
+
 REAL = "(m.condicion IS NULL OR m.condicion NOT LIKE 'Carga inicial%')"
 TIPO_EQUIPO = "CASE e.tipo WHEN 'telefono' THEN 'Teléfono' ELSE 'Impresora' END"
 
@@ -29,11 +31,13 @@ HOJAS = {
                     ("supervisor_ruta", "Supervisor de la ruta"), ("situacion", "Situación")],
     "por_usuario": [("usuario", "Usuario"), ("rol", "Rol"), ("salidas", "Salidas"), ("retornos", "Retornos"),
                     ("primer_escaneo", "Primer escaneo"), ("ultimo_escaneo", "Último escaneo")],
+    "actividad": [("fecha", "Fecha y hora"), ("persona", "Persona"), ("accion", "Acción"), ("objetivo", "Sobre"), ("detalle", "Detalle")],
     "movimientos": [("fecha_hora", "Fecha y hora"), ("tipo", "Movimiento"), ("equipo", "Equipo"), ("tipo_equipo", "Tipo"),
                     ("serial", "Serial"), ("telefono", "Teléfono"), ("ruta", "Ruta"), ("usuario", "Usuario"), ("nota", "Nota")],
 }
 ORDEN = [("Resumen", "resumen"), ("Por ruta", "por_ruta"), ("Salieron", "salieron"), ("No regresaron", "no_regresaron"),
-         ("No salieron", "no_salieron"), ("Por usuario", "por_usuario"), ("Movimientos", "movimientos")]
+         ("No salieron", "no_salieron"), ("Por usuario", "por_usuario"), ("Movimientos", "movimientos"),
+         ("Actividad", "actividad")]
 
 
 def construir(db, desde: str, hasta: str) -> dict:
@@ -110,6 +114,14 @@ def construir(db, desde: str, hasta: str) -> dict:
         (desde, hasta),
     )]
 
+    actividad = [dict(f) for f in db.execute(
+        """SELECT fecha, usuario_nombre AS persona, accion, objetivo, detalle FROM auditoria
+           WHERE date(fecha) BETWEEN ? AND ? ORDER BY id""",
+        (desde, hasta),
+    )]
+    for f in actividad:
+        f["accion"] = auditoria.ACCIONES.get(f["accion"], f["accion"])
+
     resumen = [
         ["Desde", desde], ["Hasta", hasta], ["Generado", datetime.now().strftime("%Y-%m-%d %H:%M")], ["", ""],
         ["Equipos que SALIERON (salidas registradas)", len(salieron)],
@@ -121,7 +133,7 @@ def construir(db, desde: str, hasta: str) -> dict:
     return {
         "resumen": resumen, "salieron": salieron, "no_regresaron": no_regresaron, "no_salieron": no_salieron,
         "por_ruta": sorted(por_ruta.values(), key=lambda r: (-r["pendientes"], r["ruta"])),
-        "por_usuario": por_usuario, "movimientos": movimientos,
+        "por_usuario": por_usuario, "movimientos": movimientos, "actividad": actividad,
     }
 
 

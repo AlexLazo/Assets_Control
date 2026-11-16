@@ -3,7 +3,10 @@
 {% block contenido %}
 <h2>Mi cuenta</h2>
 <div class="tarjeta">
-  <p class="ayuda">Sesión de <strong>{{ current_user.nombre }}</strong> ({{ ROLES[current_user.rol] }}).</p>
+  <p class="ayuda">Sesión de <strong>{{ current_user.nombre }}</strong>{% if current_user.usuario %} · usuario <strong>{{ current_user.usuario }}</strong>{% endif %} ({{ ROLES[current_user.rol] }}).</p>
+  {% if current_user.debe_cambiar %}
+  <div class="flash">Tu contraseña es temporal. Escribe la que te dieron en "Contraseña actual" y elige una propia para continuar.</div>
+  {% endif %}
   <h2 style="font-size:1.05rem;">Cambiar mi contraseña</h2>
   <form method="post" style="max-width:420px;">
     <label for="actual">Contraseña actual</label>

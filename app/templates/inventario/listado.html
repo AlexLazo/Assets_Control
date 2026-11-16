@@ -5,34 +5,86 @@
 {% if not puede('inventario_editar') %}<p class="ayuda">Vista de solo lectura.</p>{% endif %}
 <div class="tarjeta">
   <p class="ayuda">
-    <a href="{{ url_for('inventario.listado') }}">Todos ({{ equipos|length }})</a> ·
+    <a href="{{ url_for('inventario.listado') }}">Todos ({{ total_equipos }})</a> ·
     <a href="{{ url_for('inventario.listado', revision=1) }}">Pendientes de revisión ({{ total_revision }})</a> ·
     <a href="{{ url_for('inventario.listado', sin_ruta=1) }}">Sin ruta asignada ({{ total_sin_ruta }})</a> ·
-    {% if puede('inventario_editar') %}<a href="{{ url_for('inventario.rutas') }}">Rutas</a>{% endif %}
+    <a href="{{ url_for('inventario.listado', ubicacion='en_ruta', orden='dias') }}">Fuera ahora</a>
+    {% if puede('inventario_editar') %} · <a href="{{ url_for('inventario.rutas') }}">Rutas</a>{% endif %}
   </p>
-  <div class="en-linea" style="justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
-    <form method="get" class="en-linea">
-      {% if solo_revision %}<input type="hidden" name="revision" value="1">{% endif %}
-      {% if solo_sin_ruta %}<input type="hidden" name="sin_ruta" value="1">{% endif %}
-      <input type="text" name="buscar" value="{{ buscar }}" placeholder="Buscar por ID, serial o número..." style="margin-bottom:0;">
-      <button type="submit">Buscar</button>
-    </form>
-    {% if puede('inventario_editar') %}<a class="boton" href="{{ url_for('inventario.nuevo') }}">+ Nuevo equipo</a>{% endif %}
+  <form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; align-items:end;">
+    {% if filtros.revision %}<input type="hidden" name="revision" value="1">{% endif %}
+    {% if filtros.sin_ruta %}<input type="hidden" name="sin_ruta" value="1">{% endif %}
+    <div><label for="buscar">Buscar</label><input type="text" id="buscar" name="buscar" value="{{ filtros.buscar }}" placeholder="ID, serial o número" style="margin-bottom:0;"></div>
+    <div><label for="tipo">Tipo</label>
+      <select id="tipo" name="tipo" style="margin-bottom:0;">
+        <option value="">Todos</option>
+        <option value="telefono" {% if filtros.tipo == 'telefono' %}selected{% endif %}>Teléfonos</option>
+        <option value="impresora" {% if filtros.tipo == 'impresora' %}selected{% endif %}>Impresoras</option>
+      </select></div>
+    <div><label for="estado">Estado</label>
+      <select id="estado" name="estado" style="margin-bottom:0;">
+        <option value="">Todos</option>
+        {% for k, nombre in estados.items() %}<option value="{{ k }}" {% if filtros.estado == k %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select></div>
+    <div><label for="ubicacion">Ubicación</label>
+      <select id="ubicacion" name="ubicacion" style="margin-bottom:0;">
+        <option value="">Todas</option>
+        <option value="en_ruta" {% if filtros.ubicacion == 'en_ruta' %}selected{% endif %}>En ruta</option>
+        <option value="en_bodega" {% if filtros.ubicacion == 'en_bodega' %}selected{% endif %}>En bodega</option>
+      </select></div>
+    <div><label for="ruta">Ruta asignada</label><input type="text" id="ruta" name="ruta" value="{{ filtros.ruta }}" placeholder="DS0001" style="margin-bottom:0;"></div>
+    <div><label for="supervisor">Supervisor</label><input type="text" id="supervisor" name="supervisor" value="{{ filtros.supervisor }}" placeholder="Kassandra" style="margin-bottom:0;"></div>
+    <div><label for="orden">Orden</label>
+      <select id="orden" name="orden" style="margin-bottom:0;">
+        {% for k, nombre in ordenes.items() %}<option value="{{ k }}" {% if filtros.orden == k %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select></div>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="submit">Filtrar</button>
+      <a class="boton secundario" href="{{ url_for('inventario.listado') }}">Limpiar</a>
+    </div>
+  </form>
+  {% if puede('inventario_editar') %}
+  <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:1rem;">
+    <a class="boton" href="{{ url_for('inventario.nuevo') }}">+ Nuevo equipo</a>
+    <a class="boton secundario" href="{{ url_for('inventario.exportar', **request.args) }}">Descargar Excel (con estos filtros)</a>
   </div>
+  {% endif %}
 </div>
+
+{% if puede('inventario_editar') %}
+<div class="tarjeta">
+  <h2 style="font-size:1.05rem;">Asignar ruta a varios equipos</h2>
+  <p class="ayuda">Marca los equipos en la tabla (o "todos los de esta página") y elige la ruta. Solo Admin y Super Admin.</p>
+  <form method="post" action="{{ url_for('inventario.asignar_ruta') }}" id="form-masivo" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;"
+        onsubmit="var n=document.querySelectorAll('.marca-equipo:checked').length; if(!n){alert('Marca al menos un equipo.');return false;} return confirm('¿Cambiar la ruta de '+n+' equipo(s)?');">
+    <input type="hidden" name="volver" value="{{ volver }}">
+    <select name="ruta_id" style="width:auto; min-width:220px; margin-bottom:0;">
+      <option value="">-- Elige la ruta --</option>
+      <option value="quitar">(Quitar ruta / dejar sin asignar)</option>
+      {% for r in rutas %}<option value="{{ r['id'] }}">{{ r['codigo'] }}</option>{% endfor %}
+    </select>
+    <button type="submit">Aplicar a los marcados (<span id="contador-marcados">0</span>)</button>
+  </form>
+</div>
+{% endif %}
 
 <div class="tarjeta">
   <table>
-    <thead><tr><th>ID</th><th>Tipo</th><th>Modelo</th><th>Estado</th><th>Ubicación</th><th>Ruta asignada</th>{% if puede('inventario_editar') %}<th colspan="2"></th>{% endif %}</tr></thead>
+    <thead><tr>
+      {% if puede('inventario_editar') %}<th style="width:2rem;"><input type="checkbox" id="marcar-todos" title="Marcar todos los de esta página" style="margin:0; width:auto;"></th>{% endif %}
+      <th>ID</th><th>Tipo</th><th>Modelo</th><th>Estado</th><th>Ubicación</th><th>Ruta asignada</th><th>Supervisor</th>{% if puede('inventario_editar') %}<th colspan="2"></th>{% endif %}
+    </tr></thead>
     <tbody>
       {% for e in equipos %}
       <tr>
-        <td>{{ e['id_interno'] }}{% if e['requiere_revision'] %} <span class="badge revision">revisar</span>{% endif %}</td>
+        {% if puede('inventario_editar') %}<td><input type="checkbox" class="marca-equipo" name="ids" value="{{ e['id_interno'] }}" form="form-masivo" style="margin:0; width:auto;"></td>{% endif %}
+        <td><a href="{{ url_for('inventario.ficha', id_interno=e['id_interno']) }}">{{ e['id_interno'] }}</a>{% if e['requiere_revision'] %} <span class="badge revision">revisar</span>{% endif %}</td>
         <td>{{ 'Teléfono' if e['tipo'] == 'telefono' else 'Impresora' }}</td>
         <td>{{ e['modelo'] or '-' }}</td>
-        <td>{{ e['estado'] }}</td>
-        <td>{% if e['ubicacion'] %}<span class="badge {{ e['ubicacion'] }}">{{ 'En ruta' if e['ubicacion'] == 'en_ruta' else 'En bodega' }}</span>{% endif %}</td>
+        <td>{{ estados.get(e['estado'], e['estado']) }}</td>
+        <td>{% if e['ubicacion'] %}<span class="badge {{ e['ubicacion'] }}">{{ 'En ruta' if e['ubicacion'] == 'en_ruta' else 'En bodega' }}{% if e['dias_fuera'] is not none %} · {{ e['dias_fuera'] }} d{% endif %}</span>{% endif %}</td>
         <td>{% if e['ruta_asignada_codigo'] %}{{ e['ruta_asignada_codigo'] }}{% else %}<span class="badge revision">sin asignar</span>{% endif %}</td>
+        <td>{{ e['supervisor'] or '-' }}</td>
         {% if puede('inventario_editar') %}
         <td><a class="boton secundario" style="padding:0.3rem 0.6rem; font-size:0.85rem;" href="{{ url_for('inventario.editar', id_interno=e['id_interno']) }}">Editar</a></td>
         <td>
@@ -43,8 +95,26 @@
         </td>
         {% endif %}
       </tr>
+      {% else %}
+      <tr><td colspan="10" class="ayuda" style="margin:0;">Ningún equipo coincide con estos filtros.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% include "_paginacion.html" %}
 </div>
+
+{% if puede('inventario_editar') %}
+<script>
+  (function () {
+    var todos = document.getElementById('marcar-todos');
+    var cuenta = document.getElementById('contador-marcados');
+    function actualizar() { cuenta.textContent = document.querySelectorAll('.marca-equipo:checked').length; }
+    todos.addEventListener('change', function () {
+      document.querySelectorAll('.marca-equipo').forEach(function (c) { c.checked = todos.checked; });
+      actualizar();
+    });
+    document.querySelectorAll('.marca-equipo').forEach(function (c) { c.addEventListener('change', actualizar); });
+  })();
+</script>
+{% endif %}
 {% endblock %}

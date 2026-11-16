@@ -1,0 +1,4 @@
+<div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; flex-wrap:wrap;">
+  <a class="boton {{ '' if request.endpoint == 'bitacora.ver' else 'secundario' }}" href="{{ url_for('bitacora.ver') }}">Movimientos</a>
+  <a class="boton {{ '' if request.endpoint == 'bitacora.actividad' else 'secundario' }}" href="{{ url_for('bitacora.actividad') }}">Actividad (auditoría)</a>
+</div>
